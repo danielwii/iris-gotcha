@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Local notes that shouldn't be in the plugin repo
+TODO.md
+notes/
