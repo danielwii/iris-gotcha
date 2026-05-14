@@ -10,10 +10,7 @@
   "plugins": [
     {
       "name": "iris-gotcha",
-      "source": {
-        "source": "github",
-        "repo": "danielwii/iris-gotcha"
-      },
+      "source": "./",
       "description": "Capture and recall gotchas, rules, architecture, topology, habits, best practices, and lessons learned with strict 7-category typing and rule-strengthening on repeated violations.",
       "version": "0.1.0",
       "author": {
