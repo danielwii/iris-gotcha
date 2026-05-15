@@ -17,15 +17,17 @@ iris-gotcha takes a different approach:
 
 ## The seven categories
 
-| Shape | Category | What it captures |
-|---|---|---|
-| Narrative | **经验** (experience) | A specific past event, no prescription |
-| Narrative + prescriptive | **教训** (lesson) | A specific past mistake **plus** the corrective rule (the classic "gotcha") |
-| Prescriptive (MUST) | **规则** (rule) | Non-negotiable command from external authority |
-| Prescriptive (SHOULD) | **最佳实践** (best practice) | Class-level recommendation with external justification |
-| Prescriptive (soft) | **习惯** (habit) | Personal/team preference |
-| Descriptive (intent) | **架构** (architecture) | How a system is designed and why |
-| Descriptive (location) | **拓扑** (topology) | Where services / files / endpoints live |
+All entries use **English category identifiers** (`type:` field). Chinese names are kept as cultural glosses.
+
+| `type` | Chinese | Shape | What it captures |
+|---|---|---|---|
+| `experience` | 经验 | Narrative | A specific past event, no prescription |
+| `lesson` | 教训 | Narrative + prescriptive | A specific past mistake **plus** the corrective rule (the classic "gotcha") |
+| `rule` | 规则 | Prescriptive (MUST) | Non-negotiable command from external authority |
+| `best-practice` | 最佳实践 | Prescriptive (SHOULD) | Class-level recommendation with external justification |
+| `habit` | 习惯 | Prescriptive (soft) | Personal/team preference |
+| `architecture` | 架构 | Descriptive (intent) | How a system is designed and why |
+| `topology` | 拓扑 | Descriptive (location) | Where services / files / endpoints live |
 
 Full strict definitions with examples and disambiguation tests: see [`skills/iris-gotcha/definitions.md`](skills/iris-gotcha/definitions.md).
 
@@ -44,6 +46,8 @@ Then add this line to your `~/.claude/CLAUDE.md`:
 @~/.claude/iris-gotcha/index.md
 ```
 
+(If `@~/` doesn't expand on your CC version, use the absolute path `@/Users/<you>/.claude/iris-gotcha/index.md`.)
+
 The first capture will bootstrap `~/.claude/iris-gotcha/` automatically.
 
 For project-scope entries, add to the project's `.claude/CLAUDE.md`:
@@ -57,7 +61,7 @@ For project-scope entries, add to the project's `.claude/CLAUDE.md`:
 Claude invokes this skill autonomously when any of these happen:
 
 - You say "记一下", "这是个坑", "remember this", "as a gotcha"
-- Claude notices itself retrying the same sub-problem 3+ times → captures as **教训**
+- Claude notices itself retrying the same sub-problem 3+ times → captures as `lesson`
 - Claude finishes a non-trivial task and identifies reusable knowledge
 - **You correct Claude for a recurring mistake** → existing entry gets strengthened, not duplicated
 - You ask "what do we have on X" → recall from the index
@@ -82,14 +86,14 @@ When the same rule is violated repeatedly, severity climbs and the language gets
 ```
 ~/.claude/iris-gotcha/                # user scope (cross-project)
 ├── index.md                          # imported into CLAUDE.md
-├── 经验/, 教训/, 规则/, 架构/, 拓扑/, 习惯/, 最佳实践/
+├── experience/, lesson/, rule/, architecture/, topology/, habit/, best-practice/
 └── (entries: YYYY-MM-DD-<slug>.md)
 
 <project>/.claude/iris-gotcha/        # project scope
 └── (same structure)
 ```
 
-To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. The skill provides an `action=push` that commits and pushes. Cross-machine sync is out of scope for v0.1.0 — manage that with git or any sync mechanism you prefer.
+To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. The skill provides an `action=push` that commits and pushes. Cross-machine sync is out of scope for v0.2.x — manage that with git or any sync mechanism you prefer.
 
 ## Design notes
 
@@ -97,9 +101,10 @@ To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. T
 - **No hooks.** Everything is triggered by the Claude session, guided by the skill description.
 - **No replacement for `claude-mem`.** `claude-mem` records *what happened*; iris-gotcha records *what we learned should happen next time*. They coexist.
 
-## Version
+## Versioning
 
-v0.1.0 — initial release. See [the design doc](https://github.com/danielwii/iris-gotcha) for context on why this exists.
+- `0.1.0` — initial release, Chinese category names in directories and frontmatter.
+- `0.2.0` — switched to English category identifiers (`type:` field), with Chinese kept as glosses. **Breaking change** for anyone who installed `0.1.0`: re-classify entries by moving from `教训/` etc. to `lesson/` etc. and update each frontmatter `type:` field to the English identifier.
 
 ## License
 

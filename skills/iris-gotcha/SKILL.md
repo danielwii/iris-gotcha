@@ -1,6 +1,6 @@
 ---
 name: iris-gotcha
-description: "Capture, classify, recall, audit, and push entries to Daniel's personal knowledge notebook (gotchas, rules, architecture, etc.) with strict 7-category typing. Use when (1) the user says '记一下' / '这是个坑' / 'remember this' / similar; (2) you notice yourself retrying the same sub-problem 3+ times in the current turn (capture as 教训); (3) you finish a non-trivial task and the solution is reusable; (4) you suspect a stored entry is relevant to the current task and want its full content; (5) you are correcting yourself after a user pointed out a recurring mistake — STRENGTHEN the existing entry rather than create a new one; (6) the user asks to audit existing entries for miscategorization. Read ~/.claude/iris-gotcha/index.md for recall and write new entries with strict typing and disambiguation."
+description: "Capture, classify, recall, audit, and push entries to Daniel's personal knowledge notebook (gotchas, rules, architecture, etc.) with strict 7-category typing. Use when (1) the user says '记一下' / '这是个坑' / 'remember this' / similar; (2) you notice yourself retrying the same sub-problem 3+ times in the current turn (capture as lesson); (3) you finish a non-trivial task and the solution is reusable; (4) you suspect a stored entry is relevant to the current task and want its full content; (5) you are correcting yourself after a user pointed out a recurring mistake — STRENGTHEN the existing entry rather than create a new one; (6) the user asks to audit existing entries for miscategorization. Read ~/.claude/iris-gotcha/index.md for recall and write new entries with strict typing and disambiguation."
 ---
 
 # iris-gotcha — Personal Knowledge Notebook
@@ -12,18 +12,34 @@ This skill is designed around three observations from a previous attempt:
 2. **Index in system context is what enables recall.** All entry titles + keywords live in a single index file that gets `@-imported` into the user's CLAUDE.md, so the index appears in every session's context without any active retrieval mechanism.
 3. **Repeated violations should strengthen rules, not add new entries.** When the assistant catches itself about to break an existing rule, the existing entry's severity gets bumped instead of a duplicate being created.
 
+## Category identifiers
+
+All entries use English category identifiers in the `type:` frontmatter field. Chinese names are kept as glosses for readability.
+
+| `type` value | Chinese gloss | Shape |
+|---|---|---|
+| `experience` | 经验 | Narrative |
+| `lesson` | 教训 | Narrative + prescription (the "gotcha") |
+| `rule` | 规则 | Prescription (MUST) |
+| `habit` | 习惯 | Prescription (soft preference) |
+| `best-practice` | 最佳实践 | Prescription (SHOULD with external justification) |
+| `architecture` | 架构 | Descriptive (design intent) |
+| `topology` | 拓扑 | Descriptive (location facts) |
+
+Full strict definitions: see `definitions.md` (sibling file). Always re-read it before classifying — definitions evolve.
+
 ## Data layout
 
 ```
 ~/.claude/iris-gotcha/                      # user scope (cross-project)
 ├── index.md                                # auto-maintained, the only file CLAUDE.md imports
-├── 经验/<slug>.md
-├── 教训/<slug>.md
-├── 规则/<slug>.md
-├── 架构/<slug>.md
-├── 拓扑/<slug>.md
-├── 习惯/<slug>.md
-└── 最佳实践/<slug>.md
+├── experience/<slug>.md
+├── lesson/<slug>.md
+├── rule/<slug>.md
+├── architecture/<slug>.md
+├── topology/<slug>.md
+├── habit/<slug>.md
+└── best-practice/<slug>.md
 
 <project>/.claude/iris-gotcha/              # project scope (project-only knowledge)
 ├── index.md                                # project CLAUDE.md imports this
@@ -35,29 +51,29 @@ Slug format: `YYYY-MM-DD-<kebab-case-title>.md`
 Entry frontmatter:
 ```yaml
 ---
-type: 教训                                   # one of the 7
-title: "Bun 在 macOS 装 global package 需要 sudo"
+type: lesson                                # one of: experience | lesson | rule | architecture | topology | habit | best-practice
+title: "Bun on macOS needs sudo to install global packages"
 keywords: [bun, macos, install, global, permission]
 scope: user                                 # user | project
 severity: medium                            # low | medium | high | critical | zero-tolerance (prescriptive types only)
 created: 2026-05-15
 last_violated: 2026-05-15                   # most recent violation date (prescriptive types only)
 violation_count: 1                          # how many times Claude has violated this rule (prescriptive types only)
-disambiguation: "why not 经验: I extracted the corrective rule 'use bunx', so it carries a prescription"
+disambiguation: "why not experience: I extracted the corrective rule 'use bunx', so it carries a prescription"
 ---
 ```
 
-Body uses Markdown. For 教训 / 规则 / 习惯 / 最佳实践 the body should be structured as:
+Body uses Markdown. For prescriptive types (`lesson` / `rule` / `habit` / `best-practice`) the body should be structured as:
 
 ```markdown
-## 现象 / Background
+## Background
 What happened or what's the context.
 
-## 以后该怎么办 / Prescription
+## Prescription
 The actual rule, in current severity language (see severity ladder below).
 ```
 
-For 经验 / 架构 / 拓扑, just a narrative or descriptive paragraph is fine. No prescription section.
+For descriptive/narrative types (`experience` / `architecture` / `topology`), just a narrative or descriptive paragraph is fine. No prescription section.
 
 ## When you must invoke this skill
 
@@ -66,8 +82,8 @@ Invoke this skill (action and arguments below) when any of these triggers fire:
 | Trigger | Action |
 |---|---|
 | User says "记一下", "这是个坑", "以后记得", "remember this", "save as gotcha", or asks to capture something | `action=capture` |
-| You realize you've tried 3+ distinct approaches at the same sub-problem in this turn or recent turns | `action=capture` with type=教训 |
-| You finish a non-trivial task and the way it was solved is reusable knowledge | `action=capture` (likely 教训, 最佳实践, or 架构) |
+| You realize you've tried 3+ distinct approaches at the same sub-problem in this turn or recent turns | `action=capture` with type=lesson |
+| You finish a non-trivial task and the way it was solved is reusable knowledge | `action=capture` (likely `lesson`, `best-practice`, or `architecture`) |
 | User points out you violated a behavior they previously corrected you on | `action=capture` (the protocol will detect duplication and strengthen the existing entry) |
 | You suspect an indexed entry is relevant to the current task | `action=recall` with keywords |
 | User asks "what do we have on X" or "did we already learn about X" | `action=recall` |
@@ -94,7 +110,7 @@ Apply this decision rule:
 
 ### Step 3: Classify into one of 7 categories
 
-Apply the disambiguation tests in `definitions.md` rigorously. The category must be **exactly one** of: 经验, 教训, 规则, 架构, 拓扑, 习惯, 最佳实践.
+Apply the disambiguation tests in `definitions.md` rigorously. The category must be **exactly one** of: `experience`, `lesson`, `rule`, `architecture`, `topology`, `habit`, `best-practice`.
 
 If the draft content could match two categories, **do not pick one and lose information**. Either:
 - Rewrite the content so only one category applies, or
@@ -104,7 +120,7 @@ If the draft content could match two categories, **do not pick one and lose info
 
 Identify the *next-closest* category that this entry is **not**. Write a one-line reason explaining the difference. Example:
 
-> `disambiguation: "why not 经验: I extracted the corrective rule 'use bunx', so it carries a prescription"`
+> `disambiguation: "why not experience: I extracted the corrective rule 'use bunx', so it carries a prescription"`
 
 If you cannot articulate a non-trivial reason, the classification is wrong. Return to Step 3.
 
@@ -123,7 +139,7 @@ For each match, `Read` the full entry. Then decide:
 
 ### Step 6: Strengthen an existing entry (instead of creating a duplicate)
 
-Applies only to prescriptive types (教训 / 规则 / 习惯 / 最佳实践). For descriptive types (架构 / 拓扑 / 经验), "strengthen" doesn't apply — descriptive entries get **edited** with new info or the new observation gets added as its own entry.
+Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice`). For descriptive types (`architecture` / `topology` / `experience`), "strengthen" doesn't apply — descriptive entries get **edited** with new info or the new observation gets added as its own entry.
 
 Strengthening protocol:
 
@@ -151,9 +167,9 @@ When rewriting the prescription on strengthening, use language at the new severi
 
 ### Step 7: Write the new entry
 
-Filename: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent).
+Filename: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent), where `<category>` is the English identifier (e.g. `lesson/`).
 
-Frontmatter as specified above. For descriptive types (经验 / 架构 / 拓扑), omit severity / violation fields.
+Frontmatter as specified above. For descriptive types (`experience` / `architecture` / `topology`), omit severity / violation fields.
 
 ### Step 8: Regenerate the index
 
@@ -169,17 +185,17 @@ Index format:
 ## ⚠️ Recently strengthened (last 7 days)
 - (entries that had severity bumped or were violated recently, sorted by last_violated date)
 
-## 教训 (lessons from specific mistakes)
-- **Bun macOS sudo** [bun, macos, install] severity:medium → `~/.claude/iris-gotcha/教训/2026-05-15-bun-macos-global-install.md`
+## lesson (教训) — lessons from specific mistakes
+- **Bun macOS sudo** [bun, macos, install] severity:medium → `~/.claude/iris-gotcha/lesson/2026-05-15-bun-macos-global-install.md`
 - ...
 
-## 规则 (non-negotiable rules)
+## rule (规则) — non-negotiable rules
 - ...
 
-## 经验 (narrative records)
+## experience (经验) — narrative records
 - ...
 
-## 架构, 拓扑, 习惯, 最佳实践
+## architecture, topology, habit, best-practice (架构, 拓扑, 习惯, 最佳实践)
 - ...
 ```
 
@@ -238,11 +254,11 @@ This skill does **not** implement automatic pull / cross-machine sync. That's a 
 
 ## Anti-patterns to avoid
 
-- **Do not silently merge categories.** If you're tempted to call a 教训 a 规则 because it "feels more authoritative," surface the ambiguity instead.
-- **Do not write multi-paragraph prescriptions.** The point of severity language is to be terse and forceful. If a rule needs paragraphs, it's probably 架构.
+- **Do not silently merge categories.** If you're tempted to call a `lesson` a `rule` because it "feels more authoritative," surface the ambiguity instead.
+- **Do not write multi-paragraph prescriptions.** The point of severity language is to be terse and forceful. If a rule needs paragraphs, it's probably `architecture`.
 - **Do not capture every observation.** Capture only when one of the triggers above fires. Avoiding noise is more important than catching every possible learning.
 - **Do not capture without re-reading definitions.md.** Memory drifts; the file is authoritative.
 
 ## Bootstrapping
 
-If `~/.claude/iris-gotcha/` does not exist yet, create it with the seven subdirectories and an empty `index.md` containing just the header. Then proceed with the capture.
+If `~/.claude/iris-gotcha/` does not exist yet, create it with the seven subdirectories (`experience/`, `lesson/`, `rule/`, `architecture/`, `topology/`, `habit/`, `best-practice/`) and an empty `index.md` containing just the header. Then proceed with the capture.
