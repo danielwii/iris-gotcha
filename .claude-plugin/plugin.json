@@ -5,9 +5,6 @@
   "author": {
     "name": "Daniel Wei"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/danielwii/iris-gotcha"
-  },
+  "repository": "https://github.com/danielwii/iris-gotcha",
   "license": "MIT"
 }
