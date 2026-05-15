@@ -1,44 +1,63 @@
 ---
 name: iris-gotcha
-description: "Use when the user wants to record a learning, gotcha, rule, architecture note, or convention into a structured knowledge base / personal notebook / lessons-learned log ('记一下', '这是个坑', 'remember this', 'save as gotcha', '以后记得'); when you've retried the same sub-problem 3+ times in a turn (signals an undocumented gotcha); when finishing a non-trivial task whose solution is reusable engineering knowledge; when you suspect a stored entry might apply to the current task and you need its full content; when the user just corrected you on a recurring mistake; when the user asks to audit, reclassify, move, or push stored entries."
+description: "Use when the user wants to record an engineering learning that the AI wouldn't already know from training — specific tool gotchas, project structure, personal preferences, recurring mistakes, workflow recipes ('记一下', '这是个坑', 'remember this', 'save as gotcha', '以后记得'); when you've retried the same sub-problem 3+ times in a turn (signals an undocumented gotcha); when finishing a non-trivial task whose solution is reusable knowledge; when you suspect a stored entry might apply to the current task; when the user just corrected you on a recurring mistake; when the user asks to audit, reclassify, move, push, or generate an overview of stored entries. NOT for safety/compliance defaults the model already enforces — those are training-redundant and pollute the index."
 ---
 
-# iris-gotcha — Personal Knowledge Notebook
+# iris-gotcha — Training-Gap Knowledge Notebook
 
-A Claude Code skill that lets the assistant build up Daniel's personal engineering knowledge over time using **seven strict categories**, **a disambiguation gate**, and **rule strengthening on repeated violations**.
+A Claude Code skill for capturing the engineering knowledge the AI **wouldn't already know from training**. That's the entire purpose. Everything else — the categories, the disambiguation gate, the strengthening protocol — follows from it.
 
-The design rests on three lessons from a prior attempt:
+## What goes in (and what doesn't)
 
-1. **Categories collapse without strict definitions.** Last time, `recipe` got eaten by `gotcha`. To defend, every entry carries a mandatory `disambiguation` field — "why not the next-closest category".
-2. **System-context index enables passive recall.** All entry titles and keywords live in a single `index.md` that gets `@-imported` into CLAUDE.md. The index is in context for every session without active retrieval.
-3. **Repeat violations should strengthen, not duplicate.** When you're about to repeat a captured mistake, the existing entry's severity gets bumped and its prescription is rewritten more forcefully. New entries are only for new knowledge.
+The AI already handles plenty without help: standard security ("don't log secrets"), safety alignment, generic best practices (input validation, error handling, REST conventions), well-known tool usage. **Capturing those is noise** — it bloats the index without changing AI behavior, because the AI was going to do the right thing anyway.
+
+What the AI **cannot** know without your help:
+
+- **Specific tool gotchas** the AI hasn't seen (e.g. `Prisma v7.8 dropped datasourceUrl, use driver adapters`)
+- **Your project's structure** (services, services-to-ports map, package layout, design intent)
+- **Your personal/team preferences** (commit style, naming, error-shape choices)
+- **Workflow recipes** specific to your environment (`ArgoCD token expired? kubectl patch the Application CRD`)
+- **Quality lessons** distilled from your specific bugs (e.g. `upsert needs both create + update branches mirrored — caught in PR #271`)
+- **Recurring mistakes the AI keeps making** despite previous corrections — these get *strengthened*, not duplicated
+
+Single test before capturing: **would the AI, in a fresh session with no notebook, refuse / handle this correctly anyway?** If yes, don't capture. If no (because of training cutoff, project privacy, or personal taste), capture.
+
+## Design principles
+
+1. **Capture only training-gap knowledge.** This is the entry gate, not a filter — see Step 0 below. Everything else assumes this is true.
+2. **Categories collapse without strict definitions.** Last time, `recipe` got eaten by `gotcha`. To defend, every entry carries a mandatory `disambiguation` field naming the next-closest category and explaining why it's not that.
+3. **System-context index enables passive recall.** All entry titles and keywords live in a single `index.md` that gets `@-imported` into CLAUDE.md, so the AI sees them every session without active retrieval.
+4. **Repeat violations strengthen, not duplicate.** When the AI is about to repeat a captured mistake, the existing entry's severity is bumped and its prescription is rewritten more forcefully — only for *behavioral* types (lesson/rule/habit/best-practice), not for *descriptive* types (architecture/topology).
 
 ## Category identifiers
 
-The `type:` field on every entry uses the English identifier. Chinese names are kept as glosses for readability.
+The `type:` field uses the English identifier. Chinese names are kept as glosses.
 
-| `type` | Gloss | Shape |
-|---|---|---|
-| `experience` | 经验 | Narrative |
-| `lesson` | 教训 | Narrative + prescription (the "gotcha") |
-| `rule` | 规则 | Prescription (MUST) |
-| `habit` | 习惯 | Prescription (soft preference) |
-| `best-practice` | 最佳实践 | Prescription (SHOULD with external justification) |
-| `architecture` | 架构 | Descriptive (design intent) |
-| `topology` | 拓扑 | Descriptive (location facts) |
+| `type` | Gloss | Shape | Typical content |
+|---|---|---|---|
+| `lesson` | 教训 | Narrative + prescription (the "gotcha") | Specific tool/library gotcha you hit; corrective rule extracted |
+| `rule` | 规则 | Prescription (MUST) | Project-specific MUST, or user override of AI default behavior |
+| `habit` | 习惯 | Prescription (soft preference) | Personal / team preference not enforceable elsewhere |
+| `best-practice` | 最佳实践 | Prescription (SHOULD with external justification) | Class-level recommendation the AI wouldn't already follow |
+| `architecture` | 架构 | Descriptive (design intent) | How a project's components fit together and why |
+| `topology` | 拓扑 | Descriptive (location facts) | Where services / files / endpoints live |
 
-Full definitions and disambiguation tests live in `definitions.md` (sibling file). Re-read it before classifying — the categories evolve, and trusting stale memory is what caused the prior collapse.
+**Six categories, not seven.** `experience` (pure narrative, no prescription) was dropped in v0.6.0 — it accumulated dead weight (history without behavior change). For session history and observations, use `claude-mem` instead; iris-gotcha is for knowledge that changes future behavior or orients understanding.
+
+Full definitions and disambiguation tests live in `definitions.md` (sibling file). Re-read it before classifying — the categories evolve, and trusting stale memory is what caused the prior `recipe`-collapse.
 
 ## Data layout
 
 ```
 ~/.claude/iris-gotcha/                # user scope (cross-project)
 ├── index.md                          # auto-maintained; CLAUDE.md imports this
-└── experience/ lesson/ rule/ architecture/ topology/ habit/ best-practice/
+├── overview.md                       # optional, generated by action=overview
+└── lesson/ rule/ architecture/ topology/ habit/ best-practice/
 
 <project>/.claude/iris-gotcha/        # project scope (project-only)
 ├── index.md                          # project CLAUDE.md imports this
-└── (same 7 category directories)
+├── overview.md                       # optional, generated by action=overview
+└── (same 6 category directories)
 ```
 
 The "project" is the **current working directory at capture time** (`pwd`). Project scope is not tied to git — many valid CC working directories aren't git repos.
@@ -48,7 +67,7 @@ Slug format: `YYYY-MM-DD-<kebab-case-title>.md`
 Entry frontmatter:
 ```yaml
 ---
-type: lesson                          # one of: experience | lesson | rule | architecture | topology | habit | best-practice
+type: lesson                          # one of: lesson | rule | architecture | topology | habit | best-practice
 title: "Bun on macOS needs sudo to install global packages"
 keywords: [bun, macos, install, global, permission]
 scope: user                           # user | project
@@ -56,7 +75,7 @@ severity: medium                      # low | medium | high | critical | zero-to
 created: 2026-05-15
 last_violated: 2026-05-15             # most recent violation date — prescriptive types only
 violation_count: 1                    # how many times Claude violated this — prescriptive types only
-disambiguation: "why not experience: I extracted the corrective rule 'use bunx', so it carries a prescription"
+disambiguation: "why not best-practice: this prescription comes from one specific incident on macOS, not an industry-consensus recommendation"
 ---
 ```
 
@@ -72,7 +91,7 @@ What happened or what's the context.
 The actual rule, in current severity language.
 ```
 
-Descriptive/narrative types (`experience` / `architecture` / `topology`) use a free-form paragraph. No prescription section.
+Descriptive types (`architecture` / `topology`) use a free-form paragraph. No prescription section.
 
 ## When to invoke
 
@@ -85,13 +104,39 @@ Descriptive/narrative types (`experience` / `architecture` / `topology`) use a f
 | An indexed entry seems relevant to current work | Usually just Read its file directly (the path is in the index already loaded). Use `action=recall` only if you need a multi-keyword search across scopes |
 | User asks to review / audit / clean entries | `action=audit` |
 | User asks to reclassify or move an entry between categories or scopes | `action=move` |
+| User asks to generate / regenerate a project overview / architecture summary | `action=overview` |
+| New session in an unfamiliar project — orient yourself by reading the synthesized overview if it exists, or generating one if it doesn't | `action=overview` |
 | User asks to save / sync to git | `action=push` |
 
 Triggers 2, 3, 4 are autonomous — capture without waiting for an explicit request. Catching these proactively is the whole point.
 
 ## Capture procedure
 
-Execute these steps in order. The ordering matters: Step 1 loads ground truth, Step 2 picks the scope (which determines where Step 5 searches), Step 5 may short-circuit to strengthening, and so on. Skipping ahead tends to produce mis-classified or duplicated entries.
+Execute these steps in order. The ordering matters: Step 0 is the gate that decides whether to capture at all; Step 1 loads ground truth; Step 2 picks the scope (which determines where Step 5 searches); Step 5 may short-circuit to strengthening; and so on. Skipping Step 0 produces redundant noise in the index; skipping later steps produces mis-classified or duplicated entries.
+
+### 0. Training-gap gate (skip if AI would already handle this)
+
+Before doing anything, ask:
+
+> **Would a fresh Claude session, with no iris-gotcha notebook, handle this correctly anyway?**
+
+If yes → **skip capture entirely**. Briefly explain to the user what you understood and why you're not capturing it (so they can override if they disagree).
+
+Don't capture:
+- Security defaults the model enforces by default (no secrets in logs, no SQL injection, no leaking API keys)
+- Standard error-handling / input-validation / safety practices
+- Industry-standard ML alignment behaviors
+- Generic best-practices the AI follows by default (REST naming, immutability where appropriate, clean code basics)
+- Restating something already in the project's CLAUDE.md / rules
+
+Do capture:
+- Specific tool versions and their specific quirks the AI may not have seen
+- Project-internal facts (services, ports, package layouts, design choices, codenames)
+- Personal/team preferences that diverge from neutral defaults
+- Workflow recipes specific to your environment
+- Specific past mistakes — especially recurring ones (those trigger Step 6 strengthening rather than fresh capture)
+
+The notebook is a supplement to training, not a re-statement of it. If capturing this entry would, after the fact, feel like "the AI didn't need to be told this", you guessed wrong at this step — go back and skip.
 
 ### 1. Re-read `definitions.md`
 
@@ -105,7 +150,7 @@ Read the sibling file. Definitions evolve, and the prior plugin's failures came 
 
 ### 3. Classify
 
-Apply the disambiguation tests in `definitions.md`. The category is exactly one of `experience` / `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`.
+Apply the disambiguation tests in `definitions.md`. The category is exactly one of `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`.
 
 If a draft seems to match two categories, that's a signal to either:
 - Rewrite so only one applies, or
@@ -117,7 +162,7 @@ Picking one and losing information is the failure mode that killed `recipe` last
 
 Pick the next-closest category and explain in one line why this entry isn't that. Example:
 
-> `disambiguation: "why not experience: I extracted the corrective rule 'use bunx', so it carries a prescription"`
+> `disambiguation: "why not best-practice: derived from one specific incident, not from class-level / industry consensus"`
 
 If you can't articulate a real difference, the classification is suspect — return to Step 3.
 
@@ -134,7 +179,7 @@ Read the relevant `index.md` (user index always; project index too if scope=proj
 
 ### 6. Strengthen (instead of duplicate)
 
-Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice`). Descriptive types (`architecture` / `topology` / `experience`) accumulate by editing or by adding new entries — there's no "severity" to bump.
+Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice`). Descriptive types (`architecture` / `topology`) accumulate by editing or by adding new entries — there's no "severity" to bump.
 
 1. Bump severity one level (capped at `zero-tolerance`).
 2. Set `last_violated` to today; increment `violation_count`.
@@ -178,7 +223,7 @@ Two writes, both idempotent:
 
 **Write the entry file**: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent). Use the English `<category>` identifier as the directory name. The Write tool creates the parent directory if needed.
 
-For descriptive types (`experience` / `architecture` / `topology`), omit `severity` / `last_violated` / `violation_count` from frontmatter.
+For descriptive types (`architecture` / `topology`), omit `severity` / `last_violated` / `violation_count` from frontmatter.
 
 **Ensure the target CLAUDE.md @-imports the index**:
 
@@ -229,9 +274,6 @@ Rewrite the relevant `index.md` from the current set of entry files. Format:
 ## rule (规则) — non-negotiable rules
 ...
 
-## experience (经验) — narrative records
-...
-
 ## architecture (架构), topology (拓扑), habit (习惯), best-practice (最佳实践)
 ...
 ```
@@ -278,6 +320,93 @@ Procedure:
 7. Regenerate both the source and destination `index.md` files (the source loses an entry, the destination gains one). When source and destination are the same index, regenerate once.
 8. Report: old path → new path, what fields changed, any new CLAUDE.md wiring done.
 
+## Overview (`action=overview`)
+
+Generates a **synthesized project overview** by reading all `architecture` and `topology` entries in the current scope (plus optionally critical-severity lessons / rules), and writing a digested document to `<scope>/.claude/iris-gotcha/overview.md`.
+
+The overview is a **derived view**, not a canonical store — entries remain the source of truth. Editing `overview.md` directly is a mistake because the next regeneration overwrites changes. To change content, edit the source entries and regenerate.
+
+### Why this exists
+
+The index lists titles + keywords (good for at-a-glance recall) but doesn't carry the *prose* of architecture/topology entries. For onboarding a new AI session — or a new human collaborator — into the project, you want one readable document, not 8 file paths to chase. `overview.md` synthesizes those into a single project orientation.
+
+### When to invoke
+
+- User says "summarize the project" / "generate project overview" / "give me an architecture snapshot"
+- New session lands in a project and the user asks "what is this codebase about" (run overview to populate yourself, then answer)
+- After several new architecture/topology entries were added in this or recent sessions (the existing overview is now stale)
+- During audit, if the user requests it
+
+### Arguments
+
+- `scope` (optional, defaults to `project` if `<pwd>/.claude/iris-gotcha/` has any entries, else `user`)
+- `include_critical_rules` (optional, default true): also pull `severity: critical` or `zero-tolerance` entries from `lesson` / `rule` so the overview surfaces "things that would surprise you"
+
+### Procedure
+
+1. Determine scope.
+2. List entries:
+   - `<scope>/architecture/*.md`
+   - `<scope>/topology/*.md`
+   - (if `include_critical_rules`) `<scope>/lesson/*.md` and `<scope>/rule/*.md` with severity ≥ `critical`
+3. Read each. Note: `last_modified` for the source-entries footer; `title`, `keywords`, and `body` for content.
+4. **Synthesize** (this is real work, not concatenation). Organize entries into a coherent narrative under fixed section headings — group related architecture entries (e.g. "auth design" + "data flow" → one paragraph), keep topology entries closer to fact-listing format. Resolve overlaps between entries gracefully.
+5. Write to `<scope>/.claude/iris-gotcha/overview.md`.
+6. Run wiring routine: ensure the project's CLAUDE.md (or `<scope>/.claude/CLAUDE.md`) imports `@./.claude/iris-gotcha/overview.md` in addition to the index. Idempotent — grep before append.
+7. Report: number of entries consumed, write path, whether the CLAUDE.md wiring changed.
+
+### Output format
+
+`overview.md` is structured for both AI parsing (predictable sections) and human reading (prose where appropriate). Layout:
+
+```markdown
+---
+generated: 2026-05-15T14:23:00Z
+source_entries: 5
+scope: project
+project_root: /Users/daniel/Workspace/iris-island
+oldest_source: 2026-05-01T10:00:00Z
+newest_source: 2026-05-15T12:00:00Z
+---
+
+# <project-name> — Architecture Overview
+
+> Auto-generated by iris-gotcha from architecture/topology entries (+ critical lessons/rules).
+> Source of truth: `<scope>/.claude/iris-gotcha/architecture/` and `topology/`.
+> Edit those, then `action=overview` to regenerate. **Do not edit this file directly — changes will be overwritten.**
+
+## Architecture
+
+[Synthesized prose. Organize by topic, not by source filename. Make it read as one coherent description of the system, not a list of disconnected entries. ~200-500 words depending on entry count.]
+
+## Topology
+
+[Synthesized but more fact-oriented. Lists or short paragraphs are fine. Services, ports, paths, env vars, package layout. Keep it scannable.]
+
+## Critical conventions
+
+[Only if include_critical_rules and there are matching entries. Brief — "These behaviors would surprise you if you didn't know them in advance: <list>". Each item references the source entry path.]
+
+## Source entries
+
+- `architecture/2026-05-15-iris-sidecar.md` (modified 2026-05-15)
+- `architecture/2026-05-15-auth-design.md` (modified 2026-05-15)
+- `topology/2026-05-15-services-and-ports.md` (modified 2026-05-15)
+- `lesson/2026-05-15-bun-macos-global-install.md` (modified 2026-05-15) [critical]
+```
+
+### Staleness handling
+
+When invoked, before writing, check the existing `overview.md`'s frontmatter `newest_source` against the actual newest entry's `last_modified`. If they match (no entries changed since last generation), report "overview is current; nothing to regenerate" and stop. This avoids needless rewriting and keeps git diffs clean.
+
+### Why not auto-regenerate
+
+Two reasons:
+1. **Trigger ambiguity**: auto-regen on every capture is too eager (overview thrashes on a flurry of unrelated entries); auto-regen on a schedule is too coarse. The user knows when it's worth a regen.
+2. **Cost**: synthesis is real LLM work, not just file concatenation. Doing it on demand keeps the cost predictable.
+
+The user (or AI noticing stale wording on session start) explicitly requests a regen.
+
 ## Recall (`action=recall`)
 
 The index is already loaded in your context via `@-import`. Scan it for keyword/title matches and Read the relevant file directly — that's recall. You only need to invoke `action=recall` explicitly when the user wants a broader multi-keyword search across both scopes or when the question is too vague to know what to Read.
@@ -286,7 +415,7 @@ The index is already loaded in your context via `@-import`. Scan it for keyword/
 
 1. List entries from `~/.claude/iris-gotcha/` (and the project scope if requested).
 2. Read each. Check:
-   - `disambiguation` is non-trivial — a vacuous reason like "why not experience: it's not experience" hints at miscategorization.
+   - `disambiguation` is non-trivial — a vacuous reason like "why not rule: it's not a rule" hints at miscategorization.
    - Type matches body content per `definitions.md`.
    - For prescriptive types, severity isn't laughably out of step with `violation_count` (e.g. count=5 but severity=`low`).
    - No two entries cover the exact same prescription (potential merge).

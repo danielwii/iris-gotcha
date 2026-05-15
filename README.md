@@ -1,6 +1,6 @@
 # iris-gotcha
 
-A Claude Code plugin for capturing and recalling personal engineering knowledge — gotchas, rules, architecture notes, habits, and lessons learned — with strict 7-category typing and rule-strengthening on repeated violations.
+A Claude Code plugin for capturing the engineering knowledge the AI wouldn't already know from training — specific tool gotchas, project structure, personal preferences, recurring mistakes, workflow recipes — with strict 6-category typing and rule-strengthening on repeated violations.
 
 ## Why
 
@@ -15,19 +15,26 @@ iris-gotcha takes a different approach:
 2. **Index-via-CLAUDE.md** — the entire entry index is `@-imported` into your CLAUDE.md, so Claude always sees what you've learned without needing to actively search.
 3. **Rule strengthening over duplication** — when you correct Claude for the same mistake twice, the existing entry's severity gets bumped (and its language gets stronger), rather than a near-duplicate getting created.
 
-## The seven categories
+## What goes in (and what doesn't)
+
+The AI already handles plenty without help: standard security ("don't log secrets"), generic best practices (input validation, error handling, REST conventions), well-known tool usage. **iris-gotcha doesn't capture those** — they pollute the index without changing AI behavior.
+
+What goes in: tool gotchas the AI hasn't seen, your project structure, personal preferences that diverge from defaults, workflow recipes specific to your environment, quality lessons from your specific bugs, recurring mistakes the AI keeps making.
+
+Single test before capturing: **would the AI, in a fresh session with no notebook, refuse / handle this correctly anyway?** If yes, don't capture.
+
+## The six categories
 
 All entries use **English category identifiers** (`type:` field). Chinese names are kept as cultural glosses.
 
 | `type` | Chinese | Shape | What it captures |
 |---|---|---|---|
-| `experience` | 经验 | Narrative | A specific past event, no prescription |
-| `lesson` | 教训 | Narrative + prescriptive | A specific past mistake **plus** the corrective rule (the classic "gotcha") |
-| `rule` | 规则 | Prescriptive (MUST) | Non-negotiable command from external authority |
-| `best-practice` | 最佳实践 | Prescriptive (SHOULD) | Class-level recommendation with external justification |
-| `habit` | 习惯 | Prescriptive (soft) | Personal/team preference |
-| `architecture` | 架构 | Descriptive (intent) | How a system is designed and why |
-| `topology` | 拓扑 | Descriptive (location) | Where services / files / endpoints live |
+| `lesson` | 教训 | Behavioral, incident-derived | A specific past mistake **plus** the corrective rule (the classic "gotcha") |
+| `rule` | 规则 | Behavioral, MUST | Project-specific MUST, or user override of AI default behavior |
+| `best-practice` | 最佳实践 | Behavioral, SHOULD | Class-level recommendation the AI wouldn't follow by default |
+| `habit` | 习惯 | Behavioral, soft preference | Personal/team preference |
+| `architecture` | 架构 | Reference, design intent | How a system is designed and why |
+| `topology` | 拓扑 | Reference, location | Where services / files / endpoints live |
 
 Full strict definitions with examples and disambiguation tests: see [`skills/iris-gotcha/definitions.md`](skills/iris-gotcha/definitions.md).
 
@@ -81,7 +88,7 @@ When the same rule is violated repeatedly, severity climbs and the language gets
 └── (same structure)
 ```
 
-To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. The skill provides an `action=push` that commits and pushes. Cross-machine sync is out of scope for v0.2.x — manage that with git or any sync mechanism you prefer.
+To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. The skill provides an `action=push` that commits and pushes. Cross-machine sync is out of scope — manage that with git or any sync mechanism you prefer.
 
 ## Design notes
 
@@ -96,6 +103,12 @@ To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. T
 - `0.3.0` — automatic, idempotent CLAUDE.md `@-import` wiring on every capture. The skill now ensures the relevant CLAUDE.md (user-scope: `~/.claude/CLAUDE.md`; project-scope: `<pwd>/CLAUDE.md` or `<pwd>/.claude/CLAUDE.md`) imports the right index file, creating the project-level CLAUDE.md if absent. No manual setup needed after install.
 - `0.4.0` — adds `action=move` for reclassifying entries between categories or scopes; tightens SKILL.md (removed redundant Bootstrapping / Project-scope sections; merged the inline severity-list duplicate; compressed the Recall section to one paragraph); softens tone (explains *why* instead of leaning on `MUST` / `NEVER` where reasoning is more reliable than imperatives).
 - `0.4.1` — rewrites the SKILL.md frontmatter `description` per the writing-skills CSO doctrine: pure "Use when..." trigger conditions with no workflow summary. Prior versions began the description with "Capture, classify, recall, audit, move, and push..." which (per writing-skills testing) can cause Claude to act on the description's process summary rather than read the full SKILL body.
+- `0.6.0` — first-principle restructure based on real-world usage data (ein's transcript):
+  - **New Step 0: training-gap gate.** Before doing anything, the skill asks "would the AI handle this without the notebook?" — if yes, skip capture. Reframes the skill's purpose: iris-gotcha is a supplement to training, not a re-statement of what the AI already does. Many "rule"-like things (no secrets in logs, sanitize input, etc.) are now correctly rejected at this gate.
+  - **`experience` category dropped.** Pure narrative without a behavioral takeaway accumulated as dead weight in the index. `claude-mem` already records session history; iris-gotcha now only captures knowledge that changes future behavior or orients understanding. Six categories instead of seven.
+  - **`rule` narrowed.** Now restricted to project-specific MUSTs the AI wouldn't know, plus user overrides of AI default behavior. Generic safety/security MUSTs the AI already enforces are explicitly out of scope.
+  - **New `action=overview`.** Synthesizes architecture + topology entries (plus critical lessons/rules) into a single readable project overview document at `<scope>/.claude/iris-gotcha/overview.md`. Designed for both AI session orientation (auto-wired into project CLAUDE.md) and human onboarding (committable to git). On-demand, not auto-regenerate. The overview is a derived view; entries remain canonical.
+  - **Active split test added** to definitions.md: before finalizing a category, the skill asks "does this entry contain a descriptive fact that would survive even if the lesson part were forgotten?" — to catch hybrid entries that should be split into topology + lesson with cross-references.
 - `0.5.0` — fills four small gaps surfaced by subagent pressure tests:
   - Initial severity is chosen by violation consequence class (not always `medium`); a small table guides starting points.
   - Frontmatter spec clarifies the `violation_count: 0` + omit `last_violated` shape for preemptive captures (vs the post-incident shape shown in the example).
