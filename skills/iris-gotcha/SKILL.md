@@ -171,6 +171,40 @@ Filename: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the 
 
 Frontmatter as specified above. For descriptive types (`experience` / `architecture` / `topology`), omit severity / violation fields.
 
+### Step 7.5: Ensure CLAUDE.md @-import is wired (idempotent)
+
+The index file is only useful if the relevant CLAUDE.md `@-imports` it. After writing the entry, verify the wiring exists for the chosen scope. If missing, add it.
+
+**For `scope=user`**:
+- Target: `~/.claude/CLAUDE.md`
+- Check: does it contain a line matching `@.*iris-gotcha/index\.md` pointing to the user-scope index?
+- If missing, append this section to the end of the file:
+  ```markdown
+
+  ## iris-gotcha Index (user)
+
+  @/Users/<USERNAME>/.claude/iris-gotcha/index.md
+  ```
+  Use the absolute path with the actual username (read from `$HOME`). The user's CLAUDE.md is their own dotfile; auto-appending here is safe (they opted in by installing this skill).
+
+**For `scope=project`**:
+- The "project" is the **current working directory at capture time** (use `pwd`). Do NOT use git detection or any other heuristic — many valid CC working directories are not git repos.
+- Target CLAUDE.md, in priority order:
+  1. `<pwd>/CLAUDE.md` — if this file exists, append into it
+  2. `<pwd>/.claude/CLAUDE.md` — if this file exists, append into it
+  3. If neither exists, **create** `<pwd>/.claude/CLAUDE.md` with the section below (preferred location because it does not put a new file at the project root, reducing accidental-commit risk).
+- Check: does the target contain `@.*iris-gotcha/index\.md`?
+- If missing, append:
+  ```markdown
+
+  ## iris-gotcha Index (project)
+
+  @./.claude/iris-gotcha/index.md
+  ```
+- If a new file was created (case 3), report it explicitly in Step 9.
+
+**Idempotency**: this step must NOT duplicate entries. Always grep the target file first; only append if no matching @-import line is found. This makes the step safe to run on every capture.
+
 ### Step 8: Regenerate the index
 
 After any write (new entry, strengthen, or update), regenerate the relevant `index.md`.
@@ -208,6 +242,7 @@ Tell the user concisely:
 - Type and scope chosen
 - Disambiguation reason (the "why not X")
 - If strengthened: old severity → new severity
+- If Step 7.5 added an @-import line (or created a project CLAUDE.md), say which file was modified/created
 
 ## Recall procedure
 

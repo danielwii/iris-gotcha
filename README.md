@@ -38,23 +38,11 @@ Full strict definitions with examples and disambiguation tests: see [`skills/iri
 /plugin install iris-gotcha
 ```
 
-Then add this line to your `~/.claude/CLAUDE.md`:
+That's it. The first capture in any directory automatically:
+- Bootstraps `~/.claude/iris-gotcha/` or `<pwd>/.claude/iris-gotcha/` (depending on scope) with the 7 category subdirectories and an `index.md`.
+- Wires the `@-import` line into the relevant `CLAUDE.md` (user-scope → `~/.claude/CLAUDE.md`; project-scope → `<pwd>/CLAUDE.md` or, if absent, creates `<pwd>/.claude/CLAUDE.md`).
 
-```markdown
-## iris-gotcha Index
-
-@~/.claude/iris-gotcha/index.md
-```
-
-(If `@~/` doesn't expand on your CC version, use the absolute path `@/Users/<you>/.claude/iris-gotcha/index.md`.)
-
-The first capture will bootstrap `~/.claude/iris-gotcha/` automatically.
-
-For project-scope entries, add to the project's `.claude/CLAUDE.md`:
-
-```markdown
-@./.claude/iris-gotcha/index.md
-```
+No manual configuration steps required.
 
 ## How it triggers
 
@@ -105,6 +93,7 @@ To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. T
 
 - `0.1.0` — initial release, Chinese category names in directories and frontmatter.
 - `0.2.0` — switched to English category identifiers (`type:` field), with Chinese kept as glosses. **Breaking change** for anyone who installed `0.1.0`: re-classify entries by moving from `教训/` etc. to `lesson/` etc. and update each frontmatter `type:` field to the English identifier.
+- `0.3.0` — automatic, idempotent CLAUDE.md `@-import` wiring on every capture. The skill now ensures the relevant CLAUDE.md (user-scope: `~/.claude/CLAUDE.md`; project-scope: `<pwd>/CLAUDE.md` or `<pwd>/.claude/CLAUDE.md`) imports the right index file, creating the project-level CLAUDE.md if absent. No manual setup needed after install.
 
 ## License
 

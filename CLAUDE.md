@@ -53,6 +53,8 @@ Both files must move together — they're independently validated and a mismatch
 - **`disambiguation` frontmatter field is mandatory** on every entry. Removing this field is a regression — the anti-collapse mechanism depends on it.
 - **Severity ladder lives only in `SKILL.md`** (5 levels: `low` / `medium` / `high` / `critical` / `zero-tolerance`). Don't fork this elsewhere.
 - **No hooks.** All triggers are LLM-driven via the skill description. If you're tempted to add a PreToolUse/PostToolUse/etc. hook, reconsider — that path was deliberately rejected during design (see `/Users/daniel/.claude/plans/rule-hazy-hickey.md`).
+- **Project root = `pwd`, NOT git root** (since v0.3.0). Many valid CC working directories are not git repos. Do not introduce git detection into the wiring logic.
+- **Wiring is idempotent** (since v0.3.0). Step 7.5 of capture must grep before append. The step runs on every capture so the system is self-healing if a user accidentally deletes an @-import line.
 
 ## What this plugin is NOT
 
