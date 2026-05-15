@@ -60,6 +60,8 @@ disambiguation: "why not experience: I extracted the corrective rule 'use bunx',
 ---
 ```
 
+**Initial capture (no prior incident)**: set `violation_count: 0` and omit `last_violated`. This is the typical shape for a `rule` / `best-practice` / `habit` captured preemptively. The above example shows the post-incident shape (`violation_count: 1`, `last_violated` set to the incident date) — typical for a `lesson` captured right after the mistake.
+
 Body in Markdown. Prescriptive types (`lesson` / `rule` / `habit` / `best-practice`) use:
 
 ```markdown
@@ -152,6 +154,24 @@ Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice
 
 The escalation is deliberately steep so that frequently-violated rules become impossible to ignore on next session start.
 
+#### Initial severity (first capture)
+
+When creating a *new* prescriptive entry (not strengthening an existing one), pick the starting severity by what a violation would actually cost. The ladder is for escalating over time as repeat violations accumulate — not a one-size-fits-all starting point.
+
+| Violation consequence class | Start at |
+|---|---|
+| Security incident, compliance failure, data loss, broken production, breach | `high` or `critical` |
+| Broken local build, lost work, wasted hour, CI failure | `medium` |
+| Style nitpick, mild annoyance, minor inefficiency | `low` |
+
+Don't default everything to `medium`. A secrets-in-logs rule that starts at `low` will sit ignored at the bottom of the index for months; starting it at `critical` puts it where the consequence demands.
+
+#### When language stops working
+
+If an entry reaches `zero-tolerance` and *still* keeps getting violated, the prescription has saturated — louder text won't help. The real next step is outside iris-gotcha: a structural fix that removes the choice (lint rule, pre-commit hook, CI check, IDE save action, snippet, project scaffold). The brain has been told; the prescription needs to leave the brain and live in tooling.
+
+When you strengthen an entry into `zero-tolerance`, surface this in Step 9: suggest the concrete structural fix that would obviate the rule.
+
 ### 7. Write the entry and wire injection
 
 Two writes, both idempotent:
@@ -226,6 +246,13 @@ Tell the user:
 - Disambiguation reason
 - If strengthened: old → new severity
 - If Step 7 created or modified a CLAUDE.md, name it
+- If your classification differs from a type the user explicitly named (e.g. they said "记一下这条规则" but the content matches `lesson`), surface the disagreement plainly and offer `action=move` as the recovery path: *"Classified as `lesson` (not `rule` as you mentioned) because [reason]. If you'd prefer `rule`, I can `action=move` it."*
+
+## Handling user disagreement with classification
+
+If the user pushes back on the type or scope you chose, **do not** silently rewrite the file or recapture. Use `action=move` instead — it properly updates `type` / `scope` / `disambiguation`, regenerates both source and destination indexes, and (if scope changed) wires the destination CLAUDE.md. Silent rewriting loses the audit trail and may leave a stale index entry.
+
+The same applies if you classify differently from a type the user explicitly named at capture time: state the disagreement in Step 9 and offer the move. Don't pre-emptively defer to the user's label without applying definitions.md — that's the rationalization that killed `recipe` last time. But once the disagreement is surfaced and the user maintains their view, *that* is when move runs.
 
 ## Move procedure (`action=move`)
 

@@ -56,6 +56,10 @@ Both files must move together — they're independently validated and a mismatch
 - **Project root = `pwd`, NOT git root** (since v0.3.0). Many valid CC working directories are not git repos. Do not introduce git detection into the wiring logic.
 - **Wiring is idempotent** (since v0.3.0). The wiring step in Step 7 of capture must grep before append. It runs on every capture, so the system is self-healing if a user accidentally deletes an @-import line.
 - **Move is the only correct way to reclassify** (since v0.4.0). When an entry's category or scope is wrong, use `action=move` — do not delete-and-recapture, because that loses violation history and disambiguation context. The move flow rewrites frontmatter (`type`, `scope`, `disambiguation`) and regenerates both source and destination indexes atomically.
+- **Description is trigger-only** (since v0.4.1). The SKILL.md frontmatter `description` must never summarize the skill's process or workflow — only describe when to invoke it. Workflow summaries in descriptions cause Claude to act on the description shortcut rather than read the SKILL body (per writing-skills CSO doctrine, empirically validated in testing).
+- **Initial severity matches consequence class** (since v0.5.0). Don't default new prescriptive entries to `medium`. Security/compliance violations start at `high` or `critical`; minor annoyances start at `low`. The ladder is for escalation over time, not a uniform floor.
+- **Disagreement on classification routes through `action=move`** (since v0.5.0). When the AI's reading of the content differs from a type the user named, the AI surfaces the disagreement in Step 9 and offers move. Silent re-classification is forbidden because it loses audit trail and can leave stale index entries.
+- **At zero-tolerance, the answer is tooling, not louder text** (since v0.5.0). When an entry hits `zero-tolerance` and keeps being violated, the SKILL directs the AI to suggest a structural fix (lint rule, pre-commit hook, CI check) instead of further word-level escalation. Severity language saturates.
 
 ## What this plugin is NOT
 

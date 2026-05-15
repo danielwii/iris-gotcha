@@ -96,6 +96,11 @@ To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. T
 - `0.3.0` — automatic, idempotent CLAUDE.md `@-import` wiring on every capture. The skill now ensures the relevant CLAUDE.md (user-scope: `~/.claude/CLAUDE.md`; project-scope: `<pwd>/CLAUDE.md` or `<pwd>/.claude/CLAUDE.md`) imports the right index file, creating the project-level CLAUDE.md if absent. No manual setup needed after install.
 - `0.4.0` — adds `action=move` for reclassifying entries between categories or scopes; tightens SKILL.md (removed redundant Bootstrapping / Project-scope sections; merged the inline severity-list duplicate; compressed the Recall section to one paragraph); softens tone (explains *why* instead of leaning on `MUST` / `NEVER` where reasoning is more reliable than imperatives).
 - `0.4.1` — rewrites the SKILL.md frontmatter `description` per the writing-skills CSO doctrine: pure "Use when..." trigger conditions with no workflow summary. Prior versions began the description with "Capture, classify, recall, audit, move, and push..." which (per writing-skills testing) can cause Claude to act on the description's process summary rather than read the full SKILL body.
+- `0.5.0` — fills four small gaps surfaced by subagent pressure tests:
+  - Initial severity is chosen by violation consequence class (not always `medium`); a small table guides starting points.
+  - Frontmatter spec clarifies the `violation_count: 0` + omit `last_violated` shape for preemptive captures (vs the post-incident shape shown in the example).
+  - Step 9 and a new "Handling user disagreement" section direct the AI to surface classification disputes and offer `action=move` rather than silently re-classifying.
+  - The severity ladder gets a "When language stops working" note: at `zero-tolerance` with continued violations, the right next step is a structural fix (lint rule, pre-commit hook, automation) outside iris-gotcha.
 
 ## License
 
