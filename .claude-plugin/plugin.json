@@ -1,7 +1,7 @@
 {
   "name": "iris-gotcha",
   "description": "Personal knowledge notebook for Claude Code: capture and recall gotchas, rules, architecture, topology, habits, best practices, and lessons learned with strict 7-category typing and rule-strengthening on repeated violations.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "Daniel Wei"
   },

@@ -54,7 +54,8 @@ Both files must move together — they're independently validated and a mismatch
 - **Severity ladder lives only in `SKILL.md`** (5 levels: `low` / `medium` / `high` / `critical` / `zero-tolerance`). Don't fork this elsewhere.
 - **No hooks.** All triggers are LLM-driven via the skill description. If you're tempted to add a PreToolUse/PostToolUse/etc. hook, reconsider — that path was deliberately rejected during design (see `/Users/daniel/.claude/plans/rule-hazy-hickey.md`).
 - **Project root = `pwd`, NOT git root** (since v0.3.0). Many valid CC working directories are not git repos. Do not introduce git detection into the wiring logic.
-- **Wiring is idempotent** (since v0.3.0). Step 7.5 of capture must grep before append. The step runs on every capture so the system is self-healing if a user accidentally deletes an @-import line.
+- **Wiring is idempotent** (since v0.3.0). The wiring step in Step 7 of capture must grep before append. It runs on every capture, so the system is self-healing if a user accidentally deletes an @-import line.
+- **Move is the only correct way to reclassify** (since v0.4.0). When an entry's category or scope is wrong, use `action=move` — do not delete-and-recapture, because that loses violation history and disambiguation context. The move flow rewrites frontmatter (`type`, `scope`, `disambiguation`) and regenerates both source and destination indexes atomically.
 
 ## What this plugin is NOT
 

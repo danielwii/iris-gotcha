@@ -1,22 +1,23 @@
 ---
 name: iris-gotcha
-description: "Capture, classify, recall, audit, and push entries to Daniel's personal knowledge notebook (gotchas, rules, architecture, etc.) with strict 7-category typing. Use when (1) the user says '记一下' / '这是个坑' / 'remember this' / similar; (2) you notice yourself retrying the same sub-problem 3+ times in the current turn (capture as lesson); (3) you finish a non-trivial task and the solution is reusable; (4) you suspect a stored entry is relevant to the current task and want its full content; (5) you are correcting yourself after a user pointed out a recurring mistake — STRENGTHEN the existing entry rather than create a new one; (6) the user asks to audit existing entries for miscategorization. Read ~/.claude/iris-gotcha/index.md for recall and write new entries with strict typing and disambiguation."
+description: "Capture, classify, recall, audit, move, and push entries to Daniel's personal knowledge notebook (gotchas, rules, architecture, etc.) with strict 7-category typing. Trigger when (1) the user says '记一下' / '这是个坑' / 'remember this' / similar; (2) you've retried the same sub-problem 3+ times this turn (capture as `lesson`); (3) you finish a non-trivial task and the way you solved it is reusable; (4) a stored entry seems relevant to the current task and you want its full content; (5) you're correcting yourself for a recurring mistake — the strengthening protocol bumps the existing entry's severity instead of creating a near-duplicate; (6) the user asks to audit existing entries; (7) the user wants to move an entry between categories or scopes. The index lives at ~/.claude/iris-gotcha/index.md and is auto-injected into CLAUDE.md."
 ---
 
 # iris-gotcha — Personal Knowledge Notebook
 
-A Claude Code skill that lets the assistant build up Daniel's personal knowledge over time using **seven strict categories**, **a disambiguation gate**, and **rule strengthening on repeated violations**.
+A Claude Code skill that lets the assistant build up Daniel's personal engineering knowledge over time using **seven strict categories**, **a disambiguation gate**, and **rule strengthening on repeated violations**.
 
-This skill is designed around three observations from a previous attempt:
-1. **Categories collapse without strict definitions.** Last time `recipe` got eaten by `gotcha`. This skill defends against that with a mandatory disambiguation field on every entry.
-2. **Index in system context is what enables recall.** All entry titles + keywords live in a single index file that gets `@-imported` into the user's CLAUDE.md, so the index appears in every session's context without any active retrieval mechanism.
-3. **Repeated violations should strengthen rules, not add new entries.** When the assistant catches itself about to break an existing rule, the existing entry's severity gets bumped instead of a duplicate being created.
+The design rests on three lessons from a prior attempt:
+
+1. **Categories collapse without strict definitions.** Last time, `recipe` got eaten by `gotcha`. To defend, every entry carries a mandatory `disambiguation` field — "why not the next-closest category".
+2. **System-context index enables passive recall.** All entry titles and keywords live in a single `index.md` that gets `@-imported` into CLAUDE.md. The index is in context for every session without active retrieval.
+3. **Repeat violations should strengthen, not duplicate.** When you're about to repeat a captured mistake, the existing entry's severity gets bumped and its prescription is rewritten more forcefully. New entries are only for new knowledge.
 
 ## Category identifiers
 
-All entries use English category identifiers in the `type:` frontmatter field. Chinese names are kept as glosses for readability.
+The `type:` field on every entry uses the English identifier. Chinese names are kept as glosses for readability.
 
-| `type` value | Chinese gloss | Shape |
+| `type` | Gloss | Shape |
 |---|---|---|
 | `experience` | 经验 | Narrative |
 | `lesson` | 教训 | Narrative + prescription (the "gotcha") |
@@ -26,274 +27,255 @@ All entries use English category identifiers in the `type:` frontmatter field. C
 | `architecture` | 架构 | Descriptive (design intent) |
 | `topology` | 拓扑 | Descriptive (location facts) |
 
-Full strict definitions: see `definitions.md` (sibling file). Always re-read it before classifying — definitions evolve.
+Full definitions and disambiguation tests live in `definitions.md` (sibling file). Re-read it before classifying — the categories evolve, and trusting stale memory is what caused the prior collapse.
 
 ## Data layout
 
 ```
-~/.claude/iris-gotcha/                      # user scope (cross-project)
-├── index.md                                # auto-maintained, the only file CLAUDE.md imports
-├── experience/<slug>.md
-├── lesson/<slug>.md
-├── rule/<slug>.md
-├── architecture/<slug>.md
-├── topology/<slug>.md
-├── habit/<slug>.md
-└── best-practice/<slug>.md
+~/.claude/iris-gotcha/                # user scope (cross-project)
+├── index.md                          # auto-maintained; CLAUDE.md imports this
+└── experience/ lesson/ rule/ architecture/ topology/ habit/ best-practice/
 
-<project>/.claude/iris-gotcha/              # project scope (project-only knowledge)
-├── index.md                                # project CLAUDE.md imports this
-└── <same seven category dirs>
+<project>/.claude/iris-gotcha/        # project scope (project-only)
+├── index.md                          # project CLAUDE.md imports this
+└── (same 7 category directories)
 ```
+
+The "project" is the **current working directory at capture time** (`pwd`). Project scope is not tied to git — many valid CC working directories aren't git repos.
 
 Slug format: `YYYY-MM-DD-<kebab-case-title>.md`
 
 Entry frontmatter:
 ```yaml
 ---
-type: lesson                                # one of: experience | lesson | rule | architecture | topology | habit | best-practice
+type: lesson                          # one of: experience | lesson | rule | architecture | topology | habit | best-practice
 title: "Bun on macOS needs sudo to install global packages"
 keywords: [bun, macos, install, global, permission]
-scope: user                                 # user | project
-severity: medium                            # low | medium | high | critical | zero-tolerance (prescriptive types only)
+scope: user                           # user | project
+severity: medium                      # low | medium | high | critical | zero-tolerance — prescriptive types only
 created: 2026-05-15
-last_violated: 2026-05-15                   # most recent violation date (prescriptive types only)
-violation_count: 1                          # how many times Claude has violated this rule (prescriptive types only)
+last_violated: 2026-05-15             # most recent violation date — prescriptive types only
+violation_count: 1                    # how many times Claude violated this — prescriptive types only
 disambiguation: "why not experience: I extracted the corrective rule 'use bunx', so it carries a prescription"
 ---
 ```
 
-Body uses Markdown. For prescriptive types (`lesson` / `rule` / `habit` / `best-practice`) the body should be structured as:
+Body in Markdown. Prescriptive types (`lesson` / `rule` / `habit` / `best-practice`) use:
 
 ```markdown
 ## Background
 What happened or what's the context.
 
 ## Prescription
-The actual rule, in current severity language (see severity ladder below).
+The actual rule, in current severity language.
 ```
 
-For descriptive/narrative types (`experience` / `architecture` / `topology`), just a narrative or descriptive paragraph is fine. No prescription section.
+Descriptive/narrative types (`experience` / `architecture` / `topology`) use a free-form paragraph. No prescription section.
 
-## When you must invoke this skill
+## When to invoke
 
-Invoke this skill (action and arguments below) when any of these triggers fire:
-
-| Trigger | Action |
+| Situation | Action |
 |---|---|
-| User says "记一下", "这是个坑", "以后记得", "remember this", "save as gotcha", or asks to capture something | `action=capture` |
-| You realize you've tried 3+ distinct approaches at the same sub-problem in this turn or recent turns | `action=capture` with type=lesson |
-| You finish a non-trivial task and the way it was solved is reusable knowledge | `action=capture` (likely `lesson`, `best-practice`, or `architecture`) |
-| User points out you violated a behavior they previously corrected you on | `action=capture` (the protocol will detect duplication and strengthen the existing entry) |
-| You suspect an indexed entry is relevant to the current task | `action=recall` with keywords |
-| User asks "what do we have on X" or "did we already learn about X" | `action=recall` |
-| User asks to audit / clean up / review existing entries | `action=audit` |
-| User says "push" / "save to git" / "sync notebook" | `action=push` |
+| User says "记一下", "这是个坑", "以后记得", "remember this", "save as gotcha" | `action=capture` |
+| You've tried 3+ distinct approaches at the same sub-problem this turn | `action=capture` (typically `lesson`) |
+| You finish a non-trivial task and the solution is reusable | `action=capture` |
+| User just corrected you on a recurring mistake | `action=capture` — Step 5 detects the duplicate and strengthens the existing entry |
+| An indexed entry seems relevant to current work | Usually just Read its file directly (the path is in the index already loaded). Use `action=recall` only if you need a multi-keyword search across scopes |
+| User asks to review / audit / clean entries | `action=audit` |
+| User asks to reclassify or move an entry between categories or scopes | `action=move` |
+| User asks to save / sync to git | `action=push` |
 
-You do **not** need to wait for an explicit user request to capture. Triggers 2, 3, 4 are autonomous — if you notice the condition, capture proactively.
+Triggers 2, 3, 4 are autonomous — capture without waiting for an explicit request. Catching these proactively is the whole point.
 
-## Capture procedure (the most important flow)
+## Capture procedure
 
-When invoked with `action=capture`, follow this procedure **in order**. Do not skip steps.
+Execute these steps in order. The ordering matters: Step 1 loads ground truth, Step 2 picks the scope (which determines where Step 5 searches), Step 5 may short-circuit to strengthening, and so on. Skipping ahead tends to produce mis-classified or duplicated entries.
 
-### Step 1: Re-read the definitions
+### 1. Re-read `definitions.md`
 
-Before classifying anything, `Read` the file `<plugin_dir>/skills/iris-gotcha/definitions.md`. The strict definitions evolve; do not classify from memory.
+Read the sibling file. Definitions evolve, and the prior plugin's failures came from classifying-from-memory.
 
-### Step 2: Determine scope (user vs project)
+### 2. Determine scope (user vs project)
 
-Apply this decision rule:
+- **Project** if the content references this project's files, services, env vars, business logic, or codename. Specific.
+- **User** if it's about a general tool, language, personal preference, or generalizable practice. Tool-agnostic of any one project.
+- **Ambiguous** → ask.
 
-- **Project scope** if the content references any of: specific file paths in this project, project-specific service names, project-specific env vars, project-specific business logic, the project codename.
-- **User scope** if the content is about: a tool or language in general (bun, postgres, react), the user's personal preferences (commit style), generic best practices.
-- **Ambiguous** → ask the user.
+### 3. Classify
 
-### Step 3: Classify into one of 7 categories
+Apply the disambiguation tests in `definitions.md`. The category is exactly one of `experience` / `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`.
 
-Apply the disambiguation tests in `definitions.md` rigorously. The category must be **exactly one** of: `experience`, `lesson`, `rule`, `architecture`, `topology`, `habit`, `best-practice`.
+If a draft seems to match two categories, that's a signal to either:
+- Rewrite so only one applies, or
+- Split into two entries.
 
-If the draft content could match two categories, **do not pick one and lose information**. Either:
-- Rewrite the content so only one category applies, or
-- Split into two entries (one per category)
+Picking one and losing information is the failure mode that killed `recipe` last time.
 
-### Step 4: Write the disambiguation field
+### 4. Write the `disambiguation` field
 
-Identify the *next-closest* category that this entry is **not**. Write a one-line reason explaining the difference. Example:
+Pick the next-closest category and explain in one line why this entry isn't that. Example:
 
 > `disambiguation: "why not experience: I extracted the corrective rule 'use bunx', so it carries a prescription"`
 
-If you cannot articulate a non-trivial reason, the classification is wrong. Return to Step 3.
+If you can't articulate a real difference, the classification is suspect — return to Step 3.
 
-### Step 5: Check for existing related entries (the strengthening gate)
+### 5. Check for existing related entries (strengthening gate)
 
-Read `~/.claude/iris-gotcha/index.md` (and the project-level index if scope is project). Look for entries that share keywords or address the same underlying concept.
-
-For each match, `Read` the full entry. Then decide:
+Read the relevant `index.md` (user index always; project index too if scope=project). Look for entries sharing keywords or addressing the same underlying concept. For each candidate, Read the full file. Then decide:
 
 | Relationship | Action |
 |---|---|
-| **Identical content, same prescription** | Do not create a new entry. If the trigger was a violation (you were about to do the wrong thing), proceed to **Step 6 (Strengthen)**. Otherwise, update `last_confirmed` date in the existing entry and stop. |
-| **Same topic, contradictory prescription** | **Stop**. Surface the contradiction to the user. Do not silently overwrite. |
-| **Related but distinct** | Proceed to Step 7 (Write new entry). Cross-reference the related entry in the body. |
-| **No match** | Proceed to Step 7 (Write new entry). |
+| **Identical content, same prescription** | If the trigger was a violation (you were about to repeat the mistake), go to Step 6 to strengthen. Otherwise update `last_confirmed` and stop. |
+| **Same topic, contradictory prescription** | Stop and surface to the user. Silent overwrite would destroy information. |
+| **Related but distinct** | Continue to Step 7. Cross-reference the related entry in the body. |
+| **No match** | Continue to Step 7. |
 
-### Step 6: Strengthen an existing entry (instead of creating a duplicate)
+### 6. Strengthen (instead of duplicate)
 
-Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice`). For descriptive types (`architecture` / `topology` / `experience`), "strengthen" doesn't apply — descriptive entries get **edited** with new info or the new observation gets added as its own entry.
+Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice`). Descriptive types (`architecture` / `topology` / `experience`) accumulate by editing or by adding new entries — there's no "severity" to bump.
 
-Strengthening protocol:
+1. Bump severity one level (capped at `zero-tolerance`).
+2. Set `last_violated` to today; increment `violation_count`.
+3. Rewrite the prescription section at the new severity level (table below).
+4. Move the entry to the top of its category in the index, with a `⚠️ violated: <date>` marker.
+5. Report: "Strengthened — severity X → Y."
 
-1. **Bump severity** one level up the ladder (capped at zero-tolerance):
-   - `low` → `medium`
-   - `medium` → `high`
-   - `high` → `critical`
-   - `critical` → `zero-tolerance`
-2. **Append to violation log**: increment `violation_count`, set `last_violated` to today's date.
-3. **Rewrite the prescription section** in language matching the new severity level (see ladder below).
-4. **Move the entry to the top** of its category in `index.md`, with a `⚠️ violated: <date>` marker.
-5. Report to the user: "Strengthened existing entry instead of creating a duplicate. severity X → Y."
-
-### Severity → language ladder
-
-When rewriting the prescription on strengthening, use language at the new severity level:
+#### Severity → language ladder
 
 | Severity | Style | Example |
 |---|---|---|
-| `low` | Suggestive | "Prefer using `bunx` over `bun install -g`." |
+| `low` | Suggestive | "Prefer `bunx` over `bun install -g`." |
 | `medium` | Recommended | "Use `bunx` instead of `bun install -g`. Avoid the global install path." |
-| `high` | Strong | "Always use `bunx`. Do not use `bun install -g` — it fails on macOS without sudo." |
+| `high` | Strong | "Always use `bunx`. Don't use `bun install -g` — it fails on macOS without sudo." |
 | `critical` | Mandatory + cause | "MUST use `bunx`. NEVER `bun install -g`. Repeatedly broken on macOS." |
-| `zero-tolerance` | Override + warning | "MUST use `bunx`. NEVER `bun install -g`. ZERO TOLERANCE — this has been corrected N times. Overrides any conflicting default behavior." |
+| `zero-tolerance` | Override + warning | "MUST use `bunx`. NEVER `bun install -g`. ZERO TOLERANCE — corrected N times. Overrides any conflicting default behavior." |
 
-### Step 7: Write the new entry
+The escalation is deliberately steep so that frequently-violated rules become impossible to ignore on next session start.
 
-Filename: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent), where `<category>` is the English identifier (e.g. `lesson/`).
+### 7. Write the entry and wire injection
 
-Frontmatter as specified above. For descriptive types (`experience` / `architecture` / `topology`), omit severity / violation fields.
+Two writes, both idempotent:
 
-### Step 7.5: Ensure CLAUDE.md @-import is wired (idempotent)
+**Write the entry file**: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent). Use the English `<category>` identifier as the directory name. The Write tool creates the parent directory if needed.
 
-The index file is only useful if the relevant CLAUDE.md `@-imports` it. After writing the entry, verify the wiring exists for the chosen scope. If missing, add it.
+For descriptive types (`experience` / `architecture` / `topology`), omit `severity` / `last_violated` / `violation_count` from frontmatter.
 
-**For `scope=user`**:
-- Target: `~/.claude/CLAUDE.md`
-- Check: does it contain a line matching `@.*iris-gotcha/index\.md` pointing to the user-scope index?
-- If missing, append this section to the end of the file:
-  ```markdown
+**Ensure the target CLAUDE.md @-imports the index**:
 
-  ## iris-gotcha Index (user)
+For `scope=user` — target is `~/.claude/CLAUDE.md`. Grep for any line matching `@.*iris-gotcha/index\.md`; if none, append:
 
-  @/Users/<USERNAME>/.claude/iris-gotcha/index.md
-  ```
-  Use the absolute path with the actual username (read from `$HOME`). The user's CLAUDE.md is their own dotfile; auto-appending here is safe (they opted in by installing this skill).
+```markdown
 
-**For `scope=project`**:
-- The "project" is the **current working directory at capture time** (use `pwd`). Do NOT use git detection or any other heuristic — many valid CC working directories are not git repos.
-- Target CLAUDE.md, in priority order:
-  1. `<pwd>/CLAUDE.md` — if this file exists, append into it
-  2. `<pwd>/.claude/CLAUDE.md` — if this file exists, append into it
-  3. If neither exists, **create** `<pwd>/.claude/CLAUDE.md` with the section below (preferred location because it does not put a new file at the project root, reducing accidental-commit risk).
-- Check: does the target contain `@.*iris-gotcha/index\.md`?
-- If missing, append:
-  ```markdown
+## iris-gotcha Index (user)
 
-  ## iris-gotcha Index (project)
+@/Users/<USERNAME>/.claude/iris-gotcha/index.md
+```
 
-  @./.claude/iris-gotcha/index.md
-  ```
-- If a new file was created (case 3), report it explicitly in Step 9.
+(Use the actual home path from `$HOME`. The user's own dotfile is safe to auto-append to — they opted in by installing this skill.)
 
-**Idempotency**: this step must NOT duplicate entries. Always grep the target file first; only append if no matching @-import line is found. This makes the step safe to run on every capture.
+For `scope=project` — target is, in priority order:
+1. `<pwd>/CLAUDE.md` if it exists
+2. `<pwd>/.claude/CLAUDE.md` if it exists
+3. Otherwise create `<pwd>/.claude/CLAUDE.md` (preferred over `<pwd>/CLAUDE.md` to reduce accidental-commit risk).
 
-### Step 8: Regenerate the index
+Grep the target; if it doesn't already import the project index, append:
 
-After any write (new entry, strengthen, or update), regenerate the relevant `index.md`.
+```markdown
 
-Index format:
+## iris-gotcha Index (project)
+
+@./.claude/iris-gotcha/index.md
+```
+
+If a new project CLAUDE.md was created, mention that explicitly in Step 9 so the user knows.
+
+The grep-then-append pattern is what makes this idempotent — running on every capture is safe and self-heals if the line was accidentally deleted.
+
+### 8. Regenerate the index
+
+Rewrite the relevant `index.md` from the current set of entry files. Format:
 
 ```markdown
 # iris-gotcha Index — User Scope
 
-> Auto-maintained by iris-gotcha skill. To get full content, Read the file path.
+> Auto-maintained by iris-gotcha. For full content, Read the file path.
 
 ## ⚠️ Recently strengthened (last 7 days)
-- (entries that had severity bumped or were violated recently, sorted by last_violated date)
+- (sorted by last_violated, most recent first)
 
 ## lesson (教训) — lessons from specific mistakes
-- **Bun macOS sudo** [bun, macos, install] severity:medium → `~/.claude/iris-gotcha/lesson/2026-05-15-bun-macos-global-install.md`
-- ...
+- **<title>** [k1, k2, k3] severity:<sev> → `<path>`
 
 ## rule (规则) — non-negotiable rules
-- ...
+...
 
 ## experience (经验) — narrative records
-- ...
+...
 
-## architecture, topology, habit, best-practice (架构, 拓扑, 习惯, 最佳实践)
-- ...
+## architecture (架构), topology (拓扑), habit (习惯), best-practice (最佳实践)
+...
 ```
 
-Keep each line **single-line and short** (title + 3-5 keywords + severity + path). The index is read into every session via `@-import`, so token cost matters.
+Keep each line short (title + 3–5 keywords + severity + path). The index sits in every session's context via `@-import`, so token cost compounds.
 
-### Step 9: Report to the user
+### 9. Report
 
-Tell the user concisely:
+Tell the user:
 - Path of new (or strengthened) entry
 - Type and scope chosen
-- Disambiguation reason (the "why not X")
-- If strengthened: old severity → new severity
-- If Step 7.5 added an @-import line (or created a project CLAUDE.md), say which file was modified/created
+- Disambiguation reason
+- If strengthened: old → new severity
+- If Step 7 created or modified a CLAUDE.md, name it
 
-## Recall procedure
+## Move procedure (`action=move`)
 
-Invoked when you need to retrieve a stored entry.
+For correcting past misclassifications surfaced by audit, or reclassifying when an entry's nature is reassessed (e.g. a `lesson` outgrew its incident and became a `rule`; a `user`-scope entry turned out to be project-specific).
 
-1. The index is already in your context (via CLAUDE.md `@-import`). Scan it for keyword/title matches.
-2. If found, `Read` the relevant file path directly.
-3. If the user asked "what do we have on X" and there's no match, say so plainly.
+Arguments:
+- `entry_path` — path to the existing entry file
+- `new_type` (optional) — target category (one of the 7 identifiers)
+- `new_scope` (optional) — target scope (`user` or `project`)
+- One of `new_type` / `new_scope` must change; both can change in one move.
 
-You do **not** need to invoke the skill explicitly for recall in most cases — Reading the file is enough. Invoke `action=recall` only when the user wants you to do a broader search across multiple keywords or scopes.
+Procedure:
 
-## Audit procedure
+1. Read the existing entry. Note current `type`, `scope`, title, keywords, content.
+2. If `new_type` was given, re-validate against `definitions.md` — the destination must be a real category and the entry must actually fit there. Update `disambiguation` to reference the new next-closest category (the old `disambiguation` is now stale).
+3. Compute the target path:
+   - Scope root: `~/.claude/iris-gotcha/` (user) or `<pwd>/.claude/iris-gotcha/` (project, using the entry's project root if scope didn't change, otherwise the user's `pwd`).
+   - Category dir: the (possibly new) `<type>`.
+   - Filename: keep the existing slug.
+4. If the target path already exists, stop and surface to the user — silent overwrite of a different entry is dangerous.
+5. Move the file (`mv` or Write the file at new path then delete the old). Update frontmatter: `type` (if changed), `scope` (if changed), `disambiguation` (if `new_type` changed).
+6. If scope changed, run Step 7's wiring routine for the new scope (the destination CLAUDE.md may not yet import its index).
+7. Regenerate both the source and destination `index.md` files (the source loses an entry, the destination gains one). When source and destination are the same index, regenerate once.
+8. Report: old path → new path, what fields changed, any new CLAUDE.md wiring done.
 
-Invoked with `action=audit` (typically when the user asks "review entries" / "check for miscategorization").
+## Recall (`action=recall`)
 
-1. List all entries from `~/.claude/iris-gotcha/` (and project scope if requested).
-2. For each entry, Read it. Verify:
-   - The disambiguation field is non-trivial (rejects misclassification).
-   - The type matches the body content per `definitions.md`.
-   - For prescriptive types, severity matches violation history.
-3. Produce a report: entries that look mis-classified, entries with high violation count but low severity (should be bumped), duplicates that should be merged.
-4. Do not auto-fix. Present the report and let the user decide.
+The index is already loaded in your context via `@-import`. Scan it for keyword/title matches and Read the relevant file directly — that's recall. You only need to invoke `action=recall` explicitly when the user wants a broader multi-keyword search across both scopes or when the question is too vague to know what to Read.
 
-## Push procedure
+## Audit (`action=audit`)
 
-Invoked with `action=push` (user asks to "save to git" / "push notebook").
+1. List entries from `~/.claude/iris-gotcha/` (and the project scope if requested).
+2. Read each. Check:
+   - `disambiguation` is non-trivial — a vacuous reason like "why not experience: it's not experience" hints at miscategorization.
+   - Type matches body content per `definitions.md`.
+   - For prescriptive types, severity isn't laughably out of step with `violation_count` (e.g. count=5 but severity=`low`).
+   - No two entries cover the exact same prescription (potential merge).
+3. Produce a report and let the user decide. Don't auto-fix — moving / strengthening / merging entries during an audit pass tends to overwhelm the user with changes they didn't review.
 
-1. Check whether `~/.claude/iris-gotcha/` is a git repo (`.git` directory exists).
-   - If not, tell the user how to initialize: `cd ~/.claude/iris-gotcha && git init && git remote add origin <url>`. Stop.
-2. If it is a repo:
-   - `cd ~/.claude/iris-gotcha`
-   - Check `git status` for changes.
-   - If clean, report "nothing to push" and stop.
-   - Otherwise: `git add . && git commit -m "iris-gotcha: <summary of changes>"` and `git push` (only if a remote is configured; otherwise commit only).
-3. Report the commit hash and pushed remote (if any).
+## Push (`action=push`)
 
-This skill does **not** implement automatic pull / cross-machine sync. That's a deliberate later decision.
+1. If `~/.claude/iris-gotcha/` isn't a git repo (`.git` absent), tell the user how to initialize: `cd ~/.claude/iris-gotcha && git init && git remote add origin <url>`. Stop.
+2. Otherwise, in that directory: check `git status`. If clean, report "nothing to push" and stop. Otherwise `git add . && git commit -m "iris-gotcha: <summary>"` and `git push` (if a remote is configured; otherwise commit only).
+3. Report commit hash and pushed remote (if any).
 
-## Project-scope vs user-scope rules
+Cross-machine sync (automatic pull, conflict resolution) is deliberately out of scope. Use git, Syncthing, iCloud — whatever fits.
 
-- Project entries live in `<project>/.claude/iris-gotcha/` and are imported by the project's CLAUDE.md.
-- User entries live in `~/.claude/iris-gotcha/` and are imported by the user's global CLAUDE.md.
-- An entry never lives in both scopes. If a user-scope entry turns out to be project-specific (or vice versa), move the file, do not duplicate.
+## Common failure modes
 
-## Anti-patterns to avoid
-
-- **Do not silently merge categories.** If you're tempted to call a `lesson` a `rule` because it "feels more authoritative," surface the ambiguity instead.
-- **Do not write multi-paragraph prescriptions.** The point of severity language is to be terse and forceful. If a rule needs paragraphs, it's probably `architecture`.
-- **Do not capture every observation.** Capture only when one of the triggers above fires. Avoiding noise is more important than catching every possible learning.
-- **Do not capture without re-reading definitions.md.** Memory drifts; the file is authoritative.
-
-## Bootstrapping
-
-If `~/.claude/iris-gotcha/` does not exist yet, create it with the seven subdirectories (`experience/`, `lesson/`, `rule/`, `architecture/`, `topology/`, `habit/`, `best-practice/`) and an empty `index.md` containing just the header. Then proceed with the capture.
+- **Silent category merging.** If a `lesson` "feels like a rule because it's important", that's the failure mode that killed `recipe` last time. Surface the ambiguity to the user instead of picking quietly.
+- **Multi-paragraph prescriptions.** Severity language is meant to be terse and forceful. If a rule needs paragraphs of explanation, it's probably `architecture` (which is descriptive) wearing a rule's clothes.
+- **Capturing noise.** Capture only when one of the triggers fires. The signal-to-noise ratio of the index is more important than catching every possible learning — a noisy index is unreadable.
+- **Classifying from memory.** Definitions evolve. Always Read `definitions.md` before classifying, even if you "remember" how the categories work.
