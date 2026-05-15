@@ -1,6 +1,6 @@
 ---
 name: iris-gotcha
-description: "Capture, classify, recall, audit, move, and push entries to Daniel's personal knowledge notebook (gotchas, rules, architecture, etc.) with strict 7-category typing. Trigger when (1) the user says '记一下' / '这是个坑' / 'remember this' / similar; (2) you've retried the same sub-problem 3+ times this turn (capture as `lesson`); (3) you finish a non-trivial task and the way you solved it is reusable; (4) a stored entry seems relevant to the current task and you want its full content; (5) you're correcting yourself for a recurring mistake — the strengthening protocol bumps the existing entry's severity instead of creating a near-duplicate; (6) the user asks to audit existing entries; (7) the user wants to move an entry between categories or scopes. The index lives at ~/.claude/iris-gotcha/index.md and is auto-injected into CLAUDE.md."
+description: "Use when the user wants to record a learning, gotcha, rule, architecture note, or convention into a structured knowledge base / personal notebook / lessons-learned log ('记一下', '这是个坑', 'remember this', 'save as gotcha', '以后记得'); when you've retried the same sub-problem 3+ times in a turn (signals an undocumented gotcha); when finishing a non-trivial task whose solution is reusable engineering knowledge; when you suspect a stored entry might apply to the current task and you need its full content; when the user just corrected you on a recurring mistake; when the user asks to audit, reclassify, move, or push stored entries."
 ---
 
 # iris-gotcha — Personal Knowledge Notebook
