@@ -79,3 +79,7 @@ Both files must move together — they're independently validated and a mismatch
 
 Plugin code: this repo.
 User entries: `~/.claude/iris-gotcha/` on each machine (not committed here; sync mechanism deliberately deferred — see Open questions in the design doc).
+
+## iris-gotcha Index (project)
+
+@./.claude/iris-gotcha/index.md
