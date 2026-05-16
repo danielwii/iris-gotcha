@@ -193,7 +193,30 @@ Probes:
 
 Result: **three** entries, each focused, all cross-referenced. No category eats the others' information.
 
-If you can't articulate a meaningful answer to one of the probes, that probe returns no — don't force a stub entry.
+### When a probe answer is unclear (since v0.8.0)
+
+A probe's answer can be one of three states, not two:
+
+| Probe answer | Source of certainty | Action |
+|---|---|---|
+| **yes** | You can articulate the aspect concretely | Create the entry of that type |
+| **confirmed-no** | The aspect genuinely doesn't apply; you've considered it | Skip — don't force a stub |
+| **unknown** | The answer depends on knowledge the user has but you don't (intent, history, design rationale, future behavior the user wants) | **Ask the user one short clarifying question**, then proceed with their answer |
+
+Default-to-no on unknown is the more expensive failure mode: skipping the user's knowledge silently loses information only they have. One clarifying question is cheap.
+
+The intent and prescription probes are the most likely to hit `unknown` — they often depend on user-only knowledge (was this split deliberate? do you want a hard rule here?). The fact probe is usually answerable by inspection, so `unknown` there is rarer.
+
+**Worked example — using ask-when-unknown:**
+
+Raw observation: *"iris-gotcha doesn't have any hooks registered in settings.json — all behavior is in the markdown."*
+
+Probes:
+- **Intent**: unknown — is this an accident of the implementation so far, or a deliberate property? You can't tell from the observation alone. → **Ask the user**: "Is markdown-only a deliberate architectural choice, or just where the implementation happens to be?"
+- **Fact**: yes — verifiable by `cat settings.json` (no hooks present). → potential `topology` entry.
+- **Prescription**: unknown — should this be a hard rule against adding hooks in the future, or just current state? → **Ask the user**: "Should this be a permanent rule against hooks, or just descriptive of current state?"
+
+If user answers both as deliberate-and-permanent → three-way split (architecture + topology + rule). If user answers "just current state" → only the topology entry, no split. The ask gates which categories actually apply.
 
 ## The "why not the other category" gate
 

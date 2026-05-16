@@ -97,8 +97,9 @@ Descriptive types (`architecture` / `topology`) use a free-form paragraph. No pr
 
 | Situation | Action |
 |---|---|
-| User says "记一下", "这是个坑", "以后记得", "remember this", "save as gotcha" | `action=capture` |
+| User says "记一下", "这是个坑", "以后记得", "remember this", "save as gotcha" | `action=capture` (run the **triage announcement** first — see below) |
 | You've tried 3+ distinct approaches at the same sub-problem this turn | `action=capture` (typically `lesson`) |
+| **End of a non-trivial debugging arc** (problem resolved OR abandoned after multi-turn isolation work) | **Run end-of-debug retrospective** — see below; if it yields a gotcha, `action=capture` |
 | You finish a non-trivial task and the solution is reusable | `action=capture` |
 | User just corrected you on a recurring mistake | `action=capture` — Step 5 detects the duplicate and strengthens the existing entry |
 | An indexed entry seems relevant to current work | Usually just Read its file directly (the path is in the index already loaded). Use `action=recall` only if you need a multi-keyword search across scopes |
@@ -109,6 +110,42 @@ Descriptive types (`architecture` / `topology`) use a free-form paragraph. No pr
 | User asks to save / sync to git | `action=push` |
 
 Triggers 2, 3, 4 are autonomous — capture without waiting for an explicit request. Catching these proactively is the whole point.
+
+### End-of-debug retrospective (since v0.8.0)
+
+A debugging arc is **multi-turn isolation work**: tracing a problem through code/logs/configs, trying hypotheses, eventually landing on a root cause (or giving up). When such an arc concludes — **whether resolved or abandoned** — pause for a one-step retrospective before moving on:
+
+> **"Was the root cause / fix something a fresh Claude session would not have known a priori?"**
+
+If **yes**: surface it to the user as a gotcha proposal. Something like:
+> "That took a few turns — the root cause was X (a Bun macOS install permission quirk). Worth capturing as a `lesson`? It would land in `~/.claude/iris-gotcha/lesson/`."
+
+Then await user confirmation (don't capture unilaterally — debug arcs are common and not every one is gotcha-worthy).
+
+If **no** (it was a routine bug fix, well-known issue, or the AI should have known): say so explicitly to close the arc, but don't capture.
+
+This trigger is **stronger than the retry-count trigger**: retry-count fires during the arc (mid-struggle); retrospective fires at the end and looks back at what was actually learned. They complement each other.
+
+Skip the retrospective only if the arc was trivial (1-2 turns, obvious fix). For anything that felt like real investigation, run it.
+
+### Triage announcement for user-triggered captures (since v0.8.0)
+
+When the user explicitly invokes capture (says "记一下", "remember this", "save as gotcha", "这是个坑"), **before writing any file**, surface what you found in the index. This makes the new-vs-update-vs-reference decision visible at the entry point, not buried in a Step 9 report after the fact.
+
+Format:
+
+> **Triage**: scanning user index (N entries) + project index (M entries) for keywords [...].
+>
+> Found: [one of]
+> - **0 candidates** → proceeding as a fresh capture.
+> - **1 candidate at `<path>` (identical prescription)** → this is a re-occurrence; I'll **strengthen** it (severity X → Y) instead of duplicating.
+> - **1 candidate at `<path>` (related but distinct)** → I'll capture as new with `## Related` cross-reference to the existing entry.
+> - **1 candidate at `<path>` (contradictory)** → **stopping**, surfacing the contradiction: existing says A, this says B. Which is right?
+> - **2+ candidates** → listing them; asking user which is the right relationship.
+
+Then proceed only after the user has the information. For the unambiguous cases (0 candidates / clear strengthen / clear cross-ref), proceed immediately after announcing. For ambiguous or contradictory cases, **wait for user input**.
+
+For autonomous captures (triggers 2, 3, 4) the triage can be more terse (you're acting on your own initiative, the user hasn't asked yet), but still announce findings.
 
 ## Capture procedure
 
@@ -142,11 +179,33 @@ The notebook is a supplement to training, not a re-statement of it. If capturing
 
 Read the sibling file. Definitions evolve, and the prior plugin's failures came from classifying-from-memory.
 
-### 2. Determine scope (user vs project)
+### 2. Determine scope (user vs project) and project root
 
-- **Project** if the content references this project's files, services, env vars, business logic, or codename. Specific.
-- **User** if it's about a general tool, language, personal preference, or generalizable practice. Tool-agnostic of any one project.
+Two coupled decisions: is this user-scope or project-scope? And if project-scope, what's the actual project root?
+
+**Scope decision**:
+- **Project** if the content references a project's files, services, env vars, business logic, or codename. Specific.
+- **User** if it's about a general tool, language, personal preference, or generalizable practice. Tool-agnostic.
 - **Ambiguous** → ask.
+
+**Project root determination (since v0.8.0)** — for `scope=project` only:
+
+`pwd` is a *hint*, not the answer. Use judgment to find the actual project the capture is about:
+
+- **Read the content.** Does it clearly name a specific project (codename, repo name, service)? If yes, locate that project's directory:
+  - Often it's the current `pwd`, but it might be a sibling, child, or ancestor.
+  - Common case: capturing about `iris-gotcha` from `~/Workspace` (pwd) → project root is `~/Workspace/iris-gotcha`, not `~/Workspace`.
+- **Check the candidate path exists** (`ls <path>/.claude/iris-gotcha/` or `ls <path>` — the project dir should be a real directory).
+- **If the content is project-specific but the project isn't obvious**, **ask the user**: "This content seems specific to project X but I'm in directory Y. Should I capture this under X, Y, or somewhere else?"
+- **If the content names multiple projects**, that's usually a sign it should be split or moved to user-scope.
+
+Don't blindly default to `pwd` when the content is obviously about a different project — captures landing in the wrong directory are hard to relocate later. **Ask once at write time** beats untangling misfiled entries.
+
+The fallback chain when the AI genuinely can't infer:
+1. Content names a specific project → use that project's root
+2. Content is project-specific but ambiguous → ask user
+3. Content is generic → `scope=user`, no project root needed
+4. Only as last resort: use `pwd` as the project root
 
 ### 3. Classify
 
