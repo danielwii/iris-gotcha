@@ -203,13 +203,20 @@ The escalation is deliberately steep so that frequently-violated rules become im
 
 When creating a *new* prescriptive entry (not strengthening an existing one), pick the starting severity by what a violation would actually cost. The ladder is for escalating over time as repeat violations accumulate — not a one-size-fits-all starting point.
 
-| Violation consequence class | Start at |
-|---|---|
-| Security incident, compliance failure, data loss, broken production, breach | `high` or `critical` |
-| Broken local build, lost work, wasted hour, CI failure | `medium` |
-| Style nitpick, mild annoyance, minor inefficiency | `low` |
+**Use this concrete qualifier table — don't reason from the consequence class abstractly. If the entry matches a qualifier, start at that level.**
 
-Don't default everything to `medium`. A secrets-in-logs rule that starts at `low` will sit ignored at the bottom of the index for months; starting it at `critical` puts it where the consequence demands.
+| Level | Qualifies if violation could… | Concrete example |
+|---|---|---|
+| `critical` | Violate a **trust boundary** (unauthorized access, accepting untrusted auth source as trusted, bypassing classifier / firewall / RBAC) — **OR** — corrupt data integrity, leak secrets, breach compliance, take production down | "Ein must require local-terminal auth for prod ops; TG/iris-channel isn't trusted" (trust boundary). "Never bypass the auth-gateway when calling internal services" (trust boundary) |
+| `high` | Break production or a critical dev workflow; cause a real incident even if recoverable; produce wrong data that downstream systems consume | "Bump shared ECR tag → must sync both ArgoCD apps; missing one means production runs old code" |
+| `medium` | Waste an hour or more; break a local build / CI; cause a fix-up commit; force a rollback that's recoverable in minutes | "Bun on macOS — use bunx, not `bun install -g`"; "psql needs the `?pgbouncer=true` param stripped" |
+| `low` | Style nitpick, mild aesthetic preference, minor inefficiency you'd notice but not block on | "Prefer single TEXT column over structured enum/code/category" |
+| `zero-tolerance` | (not for initial captures — only reached via strengthening after critical entries keep being violated) | — |
+
+Two anchoring rules:
+
+1. **Trust-boundary violations always start at `critical`.** Anything that means "the AI accepted an untrusted thing as trusted" or "the AI bypassed an access check" is a security-class failure. Even if no incident occurred yet.
+2. **Don't default everything to `medium`.** A secrets-in-logs rule that starts at `low` will sit ignored at the bottom of the index for months; starting it at `critical` puts it where the consequence demands. If you're unsure between two levels, pick the higher one — escalation needs a violation, de-escalation needs an audit.
 
 #### When language stops working
 
@@ -219,11 +226,28 @@ When you strengthen an entry into `zero-tolerance`, surface this in Step 9: sugg
 
 ### 7. Write the entry and wire injection
 
-Two writes, both idempotent:
+Two writes, both idempotent.
 
 **Write the entry file**: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent). Use the English `<category>` identifier as the directory name. The Write tool creates the parent directory if needed.
 
 For descriptive types (`architecture` / `topology`), omit `severity` / `last_violated` / `violation_count` from frontmatter.
+
+#### `## Related` body section (mandatory for split entries)
+
+When Step 3's split test produces multiple entries from the same raw observation, **every entry must reference the others** via a `## Related` body section. This is the only way future Claude can recover the full picture from any starting point in the split.
+
+Format:
+
+```markdown
+## Related
+
+- See `topology/2026-05-16-unee-shared-ecr-tag.md` — the structural fact this lesson references.
+- See `architecture/2026-05-16-unee-split-for-restart-cadence.md` — why the two apps are split in the first place.
+```
+
+Each bullet: `- See <relative-or-absolute-path> — <one-line aspect this related entry covers>`. The "aspect" half is required so the reader knows whether to chase the link.
+
+`## Related` may also appear on non-split entries when they happen to be relevant to existing entries (cross-reference is always allowed). But for split entries it is **mandatory** — write it before you finalize the file, or the split discipline is incomplete.
 
 **Ensure the target CLAUDE.md @-imports the index**:
 
@@ -282,13 +306,21 @@ Keep each line short (title + 3–5 keywords + severity + path). The index sits 
 
 ### 9. Report
 
-Tell the user:
-- Path of new (or strengthened) entry
-- Type and scope chosen
-- Disambiguation reason
-- If strengthened: old → new severity
-- If Step 7 created or modified a CLAUDE.md, name it
-- If your classification differs from a type the user explicitly named (e.g. they said "记一下这条规则" but the content matches `lesson`), surface the disagreement plainly and offer `action=move` as the recovery path: *"Classified as `lesson` (not `rule` as you mentioned) because [reason]. If you'd prefer `rule`, I can `action=move` it."*
+Tell the user, **in this order**:
+
+1. **Step 5 outcome** (mandatory — even when nothing matched): one line like
+   - `Step 5: scanned user index (5 entries), 0 matched — fresh capture.`
+   - `Step 5: scanned user + project indexes (8 entries), 1 matched (`lesson/2026-04-20-run-lint-before-commit.md`) — strengthening, not new entry.`
+   - `Step 5: scanned project index (3 entries), 1 matched with contradictory prescription — stopped, surfaced to user for resolution.`
+
+   This makes the previously-invisible scan auditable. Don't omit it just because nothing matched — the "0 matched" report is the proof that the scan happened.
+
+2. **Path(s)** of new (or strengthened) entry/entries. If Step 3 produced a split, list every file written and note they cross-reference each other via `## Related`.
+3. **Type and scope** chosen, with severity if prescriptive.
+4. **Disambiguation reason** (the "why not X" sentence).
+5. **If strengthened**: old → new severity.
+6. **CLAUDE.md wiring**: any file modified or created in Step 7.
+7. **If your classification differs from a type the user explicitly named** (e.g. they said "记一下这条规则" but the content matches `lesson`), surface the disagreement plainly and offer `action=move` as the recovery path: *"Classified as `lesson` (not `rule` as you mentioned) because [reason]. If you'd prefer `rule`, I can `action=move` it."*
 
 ## Handling user disagreement with classification
 
@@ -302,7 +334,7 @@ For correcting past misclassifications surfaced by audit, or reclassifying when 
 
 Arguments:
 - `entry_path` — path to the existing entry file
-- `new_type` (optional) — target category (one of the 7 identifiers)
+- `new_type` (optional) — target category (one of the 6 identifiers)
 - `new_scope` (optional) — target scope (`user` or `project`)
 - One of `new_type` / `new_scope` must change; both can change in one move.
 

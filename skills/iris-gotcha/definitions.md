@@ -170,13 +170,30 @@ When in doubt, **prefer the more specific category**. The hierarchy of specifici
 
 If you can't decide between two categories, the safer move is usually **split the entry into two**, one in each category, rather than picking one and losing information.
 
-### Active split test (since v0.6.0)
+### Active split test (since v0.6.0, generalized v0.7.0)
 
-Before finalizing a category, ask:
+A real-world concept often has **multiple aspects** that each map to different categories. Before finalizing a single category, run all three split probes:
 
-> "Does this entry contain a *descriptive fact* (architecture/topology) that would survive even if the lesson part were forgotten?"
+| Probe | Question | If yes, separate entry of type… |
+|---|---|---|
+| **Intent probe** | Does this entry hint at *why* the system is shaped this way? | `architecture` |
+| **Fact probe** | Does this entry contain a *what / where / how-many* fact you could verify by inspection? | `topology` |
+| **Prescription probe** | Does this entry tell you *what to do (or not do)* next time? | `lesson` / `rule` / `habit` / `best-practice` (pick by the prescriptive disambiguation) |
 
-If yes, split: capture the fact as architecture/topology, capture the prescription as lesson, cross-reference each other in the body. Real-world example: "unee-server and unee-scheduler share an ECR tag but are two ArgoCD apps; when bumping the shared image you must sync both, I missed scheduler this time" → that's a `topology` entry (the shared-tag fact) + a `lesson` entry (the missed sync, referencing the topology).
+If two or three probes return yes for the same concept, **split into multiple entries** and cross-reference them via `## Related` in each body (see SKILL.md `## Related body section` for format).
+
+**Worked example — three-way split:**
+
+Raw observation: *"unee-server and unee-scheduler share the same ECR tag `sha-xxx-main` but are two distinct ArgoCD apps — we did this on purpose so scheduler can restart independently — and this time I bumped the image but forgot to sync the scheduler, scheduler kept running the old image."*
+
+Probes:
+- **Intent**: yes — "deliberately split to allow independent restart cadence". → entry of type `architecture`.
+- **Fact**: yes — "two apps, same ECR tag". → entry of type `topology`.
+- **Prescription**: yes — "when bumping the shared image, you must sync BOTH apps; I missed scheduler this session". → entry of type `lesson`.
+
+Result: **three** entries, each focused, all cross-referenced. No category eats the others' information.
+
+If you can't articulate a meaningful answer to one of the probes, that probe returns no — don't force a stub entry.
 
 ## The "why not the other category" gate
 
