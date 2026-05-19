@@ -1,33 +1,76 @@
 ---
 name: iris-gotcha
-description: "Use when the user wants to record an engineering learning that the AI wouldn't already know from training — specific tool gotchas, project structure, personal preferences, recurring mistakes, workflow recipes ('记一下', '这是个坑', 'remember this', 'save as gotcha', '以后记得'); when you've retried the same sub-problem 3+ times in a turn (signals an undocumented gotcha); when finishing a non-trivial task whose solution is reusable knowledge; when you suspect a stored entry might apply to the current task; when the user just corrected you on a recurring mistake; when the user asks to audit, reclassify, move, push, or generate an overview of stored entries. NOT for safety/compliance defaults the model already enforces — those are training-redundant and pollute the index."
+description: "iris-gotcha is a signal-to-noise optimizer for AI context — it captures only the engineering knowledge that's worth a permanent slot in every future session's context. Use when the user wants to record a learning the AI wouldn't already know from training, AND that future sessions will actually reference ('记一下', '这是个坑', 'remember this', 'save as gotcha', '以后记得'); when you've retried the same sub-problem 3+ times in a turn (signals an undocumented gotcha); when finishing a non-trivial task whose solution is reusable knowledge; when you suspect a stored entry applies to the current task and you need its full content; when the user just corrected you on a recurring mistake; when the user asks to audit, reclassify, move, push, or generate an overview of stored entries. Do NOT capture safety/security defaults the AI already enforces (training-redundant), or low-signal entries no future session will reference (pays context tax for no behavioral change)."
 ---
 
-# iris-gotcha — Training-Gap Knowledge Notebook
+# iris-gotcha — Signal-to-Noise Optimizer for AI Context
 
-A Claude Code skill for capturing the engineering knowledge the AI **wouldn't already know from training**. That's the entire purpose. Everything else — the categories, the disambiguation gate, the strengthening protocol — follows from it.
+## Why this exists (the core purpose and evaluation criterion)
+
+iris-gotcha is **a signal-to-noise optimizer for the AI's always-on context**. Every session that starts on a machine where this plugin is installed pays a fixed token tax: the user-scope index, plus any project-scope indexes for the cwd's CLAUDE.md ancestry, are inlined via `@-import`. The plugin's job is to make that tax pay for itself by carrying **only** high-signal, training-gap engineering knowledge.
+
+This is **the criterion against which every future design choice and every individual capture should be evaluated**:
+
+> **Does this raise the ratio of "behavior-changing knowledge" to "context tokens consumed"?**
+> Or does it bloat the always-on context with material the AI was going to handle correctly anyway, or with entries no future session will actually reference?
+
+If a proposed feature, doctrine change, or capture entry doesn't visibly raise that ratio, it doesn't belong here. Token economy is the load-bearing engineering value. Categorization, disambiguation, strengthening, split tests, overview generation — every mechanism in this skill exists to push signal density up or to keep noise from accumulating.
+
+### Two gates every capture must pass
+
+| Gate | Question | Failure means |
+|---|---|---|
+| **1. Training-gap** | Would a fresh Claude session, with no notebook, handle this correctly anyway? | The entry is redundant with training — it pays context tax for zero behavioral change. |
+| **2. Signal value** | Will future sessions actually reference this — to recall a fact, avoid a mistake, or change a decision? Or is it a one-time observation that won't pay rent in next month's contexts? | The entry occupies a permanent slot but contributes nothing on most future loads. |
+
+Capture only when **both** gates pass. If the signal value isn't obvious, default to **not capturing** rather than capturing and hoping. Undertrigger is cheap (you can capture later when the value becomes clear). Overtrigger is expensive (entries are sticky — once in the index, removing them takes audit + delete cycles, and meanwhile they tax every session).
+
+### Implications for every mechanism in this skill
+
+| Mechanism | How it serves signal-to-noise |
+|---|---|
+| **Strict 6-category typing + disambiguation** | Prevents classification-layer noise (`recipe` collapsing into `gotcha`); each category has a distinct retrieval pattern |
+| **Lazy body loading** | Bodies only enter context when the AI Reads them; the always-on tax is just the index line |
+| **One-line index format** | Maximizes signal density per token in the always-on layer |
+| **Step 0 training-gap gate** | First-stage signal filter — rejects redundant-with-training content before classification |
+| **Step 5 strengthening over duplication** | Keeps the index from inflating when the same lesson recurs; bumps severity instead of adding a near-duplicate |
+| **Severity ladder + zero-tolerance** | Attention budget allocation — high-severity entries occupy more cognitive space in the index |
+| **`Recently strengthened` section** | Promotes high-signal (frequently-violated or recently-acted-on) entries to the top of the always-on layer |
+| **`action=audit`** | Periodic noise removal — finds stale or miscategorized entries |
+| **`action=overview`** | Synthesis layer — replaces N raw architecture/topology entry loads with one digested document |
+| **Active split test (3-probe)** | Avoids hybrid entries that carry multiple weakly-related signals; each entry stays focused |
+| **Markdown-only / no-runtime** | Keeps the plugin itself cheap (no per-session bootstrap cost beyond file read) |
+
+When in doubt about any change to this skill — to a procedure, a category, a default — ask: **would this raise signal density, or lower it?** If you can't articulate the signal answer, the change probably shouldn't ship.
+
+This principle also governs **future optimization and evaluation**: when proposing v0.9.0+, when reviewing PRs, when auditing the index, the same test applies. "Does this carry its weight in tokens?" is the load-bearing question. Everything else is downstream.
 
 ## What goes in (and what doesn't)
 
-The AI already handles plenty without help: standard security ("don't log secrets"), safety alignment, generic best practices (input validation, error handling, REST conventions), well-known tool usage. **Capturing those is noise** — it bloats the index without changing AI behavior, because the AI was going to do the right thing anyway.
+What clears both gates:
 
-What the AI **cannot** know without your help:
+- **Specific tool gotchas** the AI hasn't seen (e.g. `Prisma v7.8 dropped datasourceUrl, use driver adapters`) — future sessions hit this repeatedly until the library evolves past it.
+- **Your project's structure** (services, ports map, package layout, design intent) — referenced whenever the AI works on the project.
+- **Personal / team preferences** (commit style, error-shape choices) — referenced whenever the AI generates code touching that surface.
+- **Workflow recipes** for your specific environment (`ArgoCD token expired? kubectl patch the Application CRD`) — signal scales with how often the workflow recurs.
+- **Quality lessons** from specific bugs that represent a class (e.g. `upsert needs both create + update branches mirrored — caught in PR #271`) — signal scales with how often the class shows up.
+- **Recurring mistakes the AI keeps making** — these get *strengthened* (severity bumped), not duplicated. Strengthening is signal concentration, not signal addition.
 
-- **Specific tool gotchas** the AI hasn't seen (e.g. `Prisma v7.8 dropped datasourceUrl, use driver adapters`)
-- **Your project's structure** (services, services-to-ports map, package layout, design intent)
-- **Your personal/team preferences** (commit style, naming, error-shape choices)
-- **Workflow recipes** specific to your environment (`ArgoCD token expired? kubectl patch the Application CRD`)
-- **Quality lessons** distilled from your specific bugs (e.g. `upsert needs both create + update branches mirrored — caught in PR #271`)
-- **Recurring mistakes the AI keeps making** despite previous corrections — these get *strengthened*, not duplicated
+What fails the gates and shouldn't go in:
 
-Single test before capturing: **would the AI, in a fresh session with no notebook, refuse / handle this correctly anyway?** If yes, don't capture. If no (because of training cutoff, project privacy, or personal taste), capture.
+- Safety / security defaults the AI already enforces (training-redundant)
+- Generic best practices the AI follows by default (training-redundant)
+- One-time historical observations with no behavioral implication (signal = 0; if you want a trace, use `claude-mem`)
+- Hyper-niche details that will be referenced once and never again (signal too low to justify permanent context cost)
+- Restatements of CLAUDE.md content (duplicative noise across two layers)
 
 ## Design principles
 
-1. **Capture only training-gap knowledge.** This is the entry gate, not a filter — see Step 0 below. Everything else assumes this is true.
-2. **Categories collapse without strict definitions.** Last time, `recipe` got eaten by `gotcha`. To defend, every entry carries a mandatory `disambiguation` field naming the next-closest category and explaining why it's not that.
-3. **System-context index enables passive recall.** All entry titles and keywords live in a single `index.md` that gets `@-imported` into CLAUDE.md, so the AI sees them every session without active retrieval.
-4. **Repeat violations strengthen, not duplicate.** When the AI is about to repeat a captured mistake, the existing entry's severity is bumped and its prescription is rewritten more forcefully — only for *behavioral* types (lesson/rule/habit/best-practice), not for *descriptive* types (architecture/topology).
+1. **Signal-to-noise is the load-bearing value.** Every other principle below follows from it.
+2. **Capture only training-gap, signal-positive knowledge.** Step 0 enforces gate 1; the capturer's judgment (or a quick ask) enforces gate 2.
+3. **Categories collapse without strict definitions.** Last time, `recipe` got eaten by `gotcha`. Every entry carries a mandatory `disambiguation` field naming the next-closest category and explaining why it's not that — this keeps the classification layer from becoming noise itself.
+4. **System-context index enables passive recall.** All entry titles + keywords live in a single `index.md` that gets `@-imported` into CLAUDE.md, so the AI sees them every session without active retrieval. The index format is one line per entry to keep the always-on token cost minimal.
+5. **Repeat violations strengthen, not duplicate.** When the AI is about to repeat a captured mistake, the existing entry's severity is bumped and its prescription is rewritten more forcefully — only for *behavioral* types (lesson/rule/habit/best-practice), not for *descriptive* types (architecture/topology). Concentration of signal, not addition.
 
 ## Category identifiers
 

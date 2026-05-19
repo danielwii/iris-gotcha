@@ -1,6 +1,12 @@
 # iris-gotcha
 
-A Claude Code plugin for capturing the engineering knowledge the AI wouldn't already know from training — specific tool gotchas, project structure, personal preferences, recurring mistakes, workflow recipes — with strict 6-category typing and rule-strengthening on repeated violations.
+A Claude Code plugin that acts as a **signal-to-noise optimizer for AI context** — captures only the engineering knowledge that's worth a permanent slot in every future session's context. Tool gotchas, project structure, personal preferences, recurring mistakes, workflow recipes — encoded compactly (one-line index, lazy bodies), gated against training-redundancy and against low-signal noise.
+
+**Core purpose (also the evaluation criterion for future changes):**
+
+> Does this raise the ratio of "behavior-changing knowledge" to "context tokens consumed"?
+
+Every mechanism in this plugin — strict 6-category typing, disambiguation gate, severity ladder, strengthening protocol, lazy body loading, `## Related` cross-references, `action=overview`, `action=audit` — exists to push signal density up or to keep noise from accumulating. New features should be evaluated against the same test. If a change can't articulate a signal-density answer, it probably shouldn't ship.
 
 ## Why
 
@@ -103,6 +109,7 @@ To version-control your knowledge, `git init` inside `~/.claude/iris-gotcha/`. T
 - `0.3.0` — automatic, idempotent CLAUDE.md `@-import` wiring on every capture. The skill now ensures the relevant CLAUDE.md (user-scope: `~/.claude/CLAUDE.md`; project-scope: `<pwd>/CLAUDE.md` or `<pwd>/.claude/CLAUDE.md`) imports the right index file, creating the project-level CLAUDE.md if absent. No manual setup needed after install.
 - `0.4.0` — adds `action=move` for reclassifying entries between categories or scopes; tightens SKILL.md (removed redundant Bootstrapping / Project-scope sections; merged the inline severity-list duplicate; compressed the Recall section to one paragraph); softens tone (explains *why* instead of leaning on `MUST` / `NEVER` where reasoning is more reliable than imperatives).
 - `0.4.1` — rewrites the SKILL.md frontmatter `description` per the writing-skills CSO doctrine: pure "Use when..." trigger conditions with no workflow summary. Prior versions began the description with "Capture, classify, recall, audit, move, and push..." which (per writing-skills testing) can cause Claude to act on the description's process summary rather than read the full SKILL body.
+- `0.9.0` — **purpose reframe to signal-to-noise**. iris-gotcha's H1 changes from "Training-Gap Knowledge Notebook" to "Signal-to-Noise Optimizer for AI Context". Adds an explicit `## Why this exists` section establishing the **two-gate capture model** (gate 1: training-gap; gate 2: signal value — will future sessions actually reference this?) and a mechanism-by-mechanism mapping of how every existing piece of doctrine serves signal density. The signal-to-noise criterion is also installed as the **evaluation standard for future changes**: any new feature, doctrine change, or capture entry must articulate how it improves the behavior-changing-knowledge / context-token ratio. No procedure changes in v0.9.0 — purpose and evaluation framing only. (Training-gap stays as Step 0 of capture, now framed as the first-stage signal filter.)
 - `0.8.0` — shift from rigid defaults to judgment + ask. Surfaced by ein's v0.7.0 capture run and a dogfood capture:
   - **Probe answers are 3-state, not 2-state.** Previously, "can't articulate" meant "no, skip entry." Now: `yes` / `confirmed-no` / `unknown → ask the user`. Intent and prescription probes especially depend on user-only knowledge; defaulting to "no" silently loses that information. One short clarifying question beats untangling missing entries later.
   - **Project root is content-led, not pwd-led.** Step 2 of capture now uses judgment: if the content names a specific project that exists as a real directory, that's the project root — regardless of where `pwd` happens to be. The earlier rigid "project = pwd" rule misfiled the dogfood capture (running from `~/Workspace` while capturing about `~/Workspace/iris-gotcha`).

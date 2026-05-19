@@ -46,6 +46,20 @@ Both files must move together — they're independently validated and a mismatch
 - [ ] `git tag v<new>` + push
 - [ ] (optional) GitHub release
 
+## Core purpose and evaluation criterion (since v0.9.0)
+
+**iris-gotcha is a signal-to-noise optimizer for AI context.** Every future change — to procedures, to categories, to defaults, to capture entries themselves — must be evaluated against:
+
+> **Does this raise the ratio of behavior-changing knowledge to context tokens consumed?**
+
+If a change can't articulate a signal-density improvement, it probably shouldn't ship. This is the load-bearing engineering value of the entire plugin; every other design choice below follows from it.
+
+Practical implications for contributors:
+- Adding a new feature → first ask "does this improve signal-to-noise, or just add capability?" Capability for capability's sake is overhead.
+- Reviewing a PR or doctrine change → require the author to articulate the signal-density rationale.
+- Auditing the index → entries that haven't been referenced for a long time are noise candidates; mark for review.
+- Versioning → version notes should explain *how* the change improves signal density (or removes noise).
+
 ## Skill design invariants
 
 - **7 categories are canonical**: `experience` / `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`. Adding/removing requires updates in BOTH `definitions.md` AND the index template inside `SKILL.md`.
