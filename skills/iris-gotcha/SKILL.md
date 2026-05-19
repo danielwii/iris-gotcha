@@ -54,6 +54,12 @@ What clears both gates:
 - **Personal / team preferences** (commit style, error-shape choices) — referenced whenever the AI generates code touching that surface.
 - **Workflow recipes** for your specific environment (`ArgoCD token expired? kubectl patch the Application CRD`) — signal scales with how often the workflow recurs.
 - **Quality lessons** from specific bugs that represent a class (e.g. `upsert needs both create + update branches mirrored — caught in PR #271`) — signal scales with how often the class shows up.
+- **AI confabulation / reasoning failures** — incidents where you (or another AI) confidently claimed X based on partial evidence (code-reading without log verification, plausible-sounding architectural rationalization from a filename, conclusion from a single observable), and the user had to challenge before the wrong claim surfaced. **This is among the highest-signal capture classes** for iris-gotcha, because:
+  - The user already paid the cognitive cost to verify and correct — that effort shouldn't be lost
+  - The reasoning shortcut recurs across codebases (same AI, different project, same trap)
+  - The "AI sounded confident" is what makes it dangerous; silent record-and-recall is the only counter
+  - It's specifically NOT the same as a knowledge gap — the AI had context, but extrapolated incorrectly from it
+  Capture as `lesson` (the specific incident + the discipline that would have prevented the wrong claim). The body's Prescription names the discipline (e.g. "code-reading is hypothesis, runtime logs are evidence; don't reverse the order"). `## Related` should reference any abstract rule the failure violated (e.g. `.claude/rules/diagnosis-discipline.md`) — the concrete incident gives the abstract rule incident-evidence weight, so future sessions see both the rule and a vivid recent violation.
 - **Recurring mistakes the AI keeps making** — these get *strengthened* (severity bumped), not duplicated. Strengthening is signal concentration, not signal addition.
 
 What fails the gates and shouldn't go in:
