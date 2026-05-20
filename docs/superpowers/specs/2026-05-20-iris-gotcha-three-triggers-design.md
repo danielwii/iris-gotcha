@@ -168,8 +168,8 @@ User statement matches one of:
 2. **Search index** (user + project scope) by keyword. Index is already in context via `@-import` — keyword scan first, body Read only on title-ambiguous candidates.
 3. **If matched** — route to Step 5 strengthening. Announce: "This is already in index at `<path>`; will strengthen instead of new entry." Do NOT propose new.
 4. **If novel** — proceed to permanence gate.
-5. **Permanence gate (required ASK)** — T2 has less context than T1 (no plan to read), so AI MUST explicitly ask: "Is Y a permanent rule, or just for this case?" Cannot infer from tone — users often state permanent rules conversationally.
-6. **If permanent** — run full Capture Step 0–9. Disambiguation field MUST cite source: `"via user correction on YYYY-MM-DD"`.
+5. **Permanence gate (required ASK)** — T2 has less context than T1 (no plan to read), so AI MUST explicitly ask: **"Is Y a permanent fact / rule / architectural distinction (capture), or just clarifying this turn (no capture)?"** The wording accommodates descriptive Y (architectural facts the AI didn't know) as well as prescriptive Y (rules). Cannot infer from tone — users often state permanent knowledge conversationally.
+6. **If permanent** — run full Capture Step 0–9, with **explicit attention to Step 3 (3-probe split test)**. Novel-reason corrections often span multiple aspects (intent + fact + prescription). Worked example: user corrects "Iris has three surface types with different activity requirements" → decomposes into an `architecture` entry (why split), a `topology` entry (which-surface-needs-what), and a `lesson` entry (don't collapse them in diagnosis). Default to running all three probes; capture every `yes`-aspect as a cross-referenced entry via `## Related`. Disambiguation field MUST cite source: `"via user correction on YYYY-MM-DD"`.
 7. **If just-for-this-case** — apply Y for current turn only. Tell user: "Applying Y here. Not capturing — if it recurs, we'll capture next time."
 
 ### Disallowed rationalizations
