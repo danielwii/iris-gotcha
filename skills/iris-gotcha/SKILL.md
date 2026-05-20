@@ -152,8 +152,11 @@ Descriptive types (`architecture` / `topology`) use a free-form paragraph. No pr
 | User says "记一下", "这是个坑", "以后记得", "remember this", "save as gotcha" | `action=capture` (run the **triage announcement** first — see below) |
 | You've tried 3+ distinct approaches at the same sub-problem this turn | `action=capture` (typically `lesson`) |
 | **End of a non-trivial debugging arc** (problem resolved OR abandoned after multi-turn isolation work) | **Run end-of-debug retrospective** — see below; if it yields a gotcha, `action=capture` |
+| **End of a planning arc** (multi-turn design work concluded — `/make-plan` done, verbal cue like "好开始", or 3+ turn architectural discussion converged) | **Run end-of-planning retrospective** — see below; for each confirmed candidate, `action=capture` |
 | You finish a non-trivial task and the solution is reusable | `action=capture` |
 | User just corrected you on a recurring mistake | `action=capture` — Step 5 detects the duplicate and strengthens the existing entry |
+| User corrects you with a stated reason **absent** from the index | **Run correction-with-novel-reason check** — see below; if novel + permanent, `action=capture` |
+| About to write non-trivial code (new feature / refactor / multi-file work) | **Run pre-implementation rule check** — see `## Recall`; consults the index and announces applicable rules before implementing |
 | An indexed entry seems relevant to current work | Usually just Read its file directly (the path is in the index already loaded). Use `action=recall` only if you need a multi-keyword search across scopes |
 | User asks to review / audit / clean entries | `action=audit` |
 | User asks to reclassify or move an entry between categories or scopes | `action=move` |
@@ -179,6 +182,134 @@ If **no** (it was a routine bug fix, well-known issue, or the AI should have kno
 This trigger is **stronger than the retry-count trigger**: retry-count fires during the arc (mid-struggle); retrospective fires at the end and looks back at what was actually learned. They complement each other.
 
 Skip the retrospective only if the arc was trivial (1-2 turns, obvious fix). For anything that felt like real investigation, run it.
+
+### End-of-planning retrospective (since v0.11.0)
+
+A planning arc is **multi-turn design work**: discussing architecture, picking patterns, defining contracts, drafting a plan (whether via `/make-plan`, in-conversation design, or writing a spec doc). When such an arc concludes — signal-detected via any of the following — run the retrospective before transitioning to implementation.
+
+**Trigger signals (any one fires)**:
+
+- `/make-plan` (or equivalent planning skill) completes.
+- A plan file appears in conventional plan locations (`docs/plans/` / `.claude/plans/` / `plans/` / similar). Heuristic signals — non-standard plan paths still fire via the other signals below.
+- User verbal cue: "好开始", "let's implement", "go ahead", "可以了" (any explicit "transition from design to implementation" signal).
+- AI judgment: 3+ turns of architectural discussion converging with no remaining design questions.
+
+**Skip conditions**:
+
+- Planning arc was trivial (1–2 turns, no architectural decisions).
+- All candidate decisions are training-redundant (Step 0 gate would reject all).
+
+**Procedure** (pre-procedure that runs *before* the standard Capture Step 0–9; then hands off to it per-candidate):
+
+1. **Scan the planning artifact** — plan file, conversation history, or both. Identify candidate decisions that would change AI behavior in implementation.
+2. **Apply the Step 0 training-gap filter to each candidate** — drop ones that a fresh Claude would handle correctly anyway. Surviving candidates proceed.
+3. **Run the 3-probe split test on each surviving candidate** (per `definitions.md`): intent / fact / prescription. Multi-probe yes-answers produce multiple cross-referenced entries via `## Related` (per v0.7.0+ doctrine).
+4. **Permanence pre-classify (T1-specific gate)** — for each candidate, label as `permanent` (architectural commitment) or `tactical` (this-implementation-only). Tactical candidates are recommended `skip` (use `claude-mem` if needed for session history).
+5. **Structured proposal** — present candidates to user (format below). User confirms per-candidate; can override AI's permanence pre-classification.
+6. **Each confirmed candidate runs full Capture Step 1–9**, including Step 5 strengthening check (avoids duplicating existing entries).
+
+**Permanence gate — the load-bearing innovation**:
+
+Plans mix two kinds of content:
+
+| Class | Example | Action |
+|---|---|---|
+| **Permanent** (architectural commitment) | "Auth services must be split from business services" | Capture |
+| **Tactical** (this-implementation-only) | "Dual-write to old + new tables during rollout" | Skip (claude-mem if needed) |
+
+Without this discriminator, T1 pollutes the always-on layer with time-bounded decisions that lose relevance fast. The gate is mandatory; AI pre-classifies and the proposal surfaces the classification for user verification.
+
+**Proposal output format**:
+
+```
+End-of-planning retrospective triggered
+  Signal: /make-plan completed → docs/plans/2026-05-20-auth.md
+
+Scanning plan for capture candidates... 5 candidates found.
+
+[1] PERMANENT — architecture
+    Title: "Auth and business services are split; business validates JWT only"
+    Disambiguation: why not topology — design intent, not port/path facts
+    Source: plan §2.1
+    Related: [2]
+
+[2] PERMANENT — topology
+    Title: "auth-service on :8080; business services validate via JWT"
+    Source: plan §2.1
+    Related: [1]
+
+[3] PERMANENT — rule (critical, trust-boundary)
+    Title: "All API endpoints MUST go through auth-gateway"
+    Source: plan §2.3
+
+[4] TACTICAL → propose skip
+    Title: "Dual-write to old + new auth tables during rollout"
+    Reason: explicitly time-bounded ("for the migration period")
+    Recommendation: skip (or capture in claude-mem if needed)
+
+[5] PERMANENT — best-practice (borderline)
+    Title: "TLS 1.3 for all internal comms"
+    ⚠️ Step 0 borderline — industry default may already be enforced by training.
+    Recommendation: you decide.
+
+Reply: "all" / "1 2 3" / "1 2 3 5" / "none" / per-candidate edits
+```
+
+**Disallowed rationalizations**:
+
+- "Plan is too detailed, skip capture" — long plans need distilling; the value is the high-signal subset.
+- "User will capture manually if they want" — T1's entire purpose is removing the manual remember-to-capture cost.
+- "Every plan decision is permanent" — false; many are tactical. Permanence gate is mandatory.
+- "Capture everything; audit later" — audit fires only on explicit request; bad captures pollute the always-on layer until cleaned.
+
+### Correction-with-novel-reason (since v0.11.0)
+
+When the user pushes back on AI output with a stated reason absent from the index, that reason is a **missing-rule signal** — treat it as a capture trigger, not just one-time feedback to apply.
+
+**Relationship to existing Step 5 strengthening** (key disambiguation):
+
+| | Existing Step 5 | T2 |
+|---|---|---|
+| Trigger | AI about to repeat an **entry-recorded** mistake | User corrects with a stated reason **not** in the index |
+| Outcome | Strengthen existing entry (severity ↑) | Capture **new** entry |
+| Detection | AI self-monitoring | User-input pattern matching |
+
+These are complementary, not redundant.
+
+**Trigger pattern (must match shape AND AI's output diverged)**:
+
+User statement matches one of:
+
+- `[do/don't] X, because Y`
+- `this violates [Y]` / `这违反了 Y`
+- `we [must/should] [do/avoid] X` (with stated reason)
+
+**AND** AI's current output/intent diverges from Y. Otherwise it's informational, not corrective.
+
+**Skip conditions**:
+
+- User correction without a stated reason ("不对", "改一下") — nothing to capture.
+- AI's output already conforms to user's statement — informational, not corrective.
+- Reason Y is already in the index — route to Step 5 strengthening instead.
+- Reason Y is training-redundant (Step 0 gate would reject).
+- User just invoked an explicit capture flow ("记一下") — avoid double-triggering.
+
+**Procedure**:
+
+1. **Extract reason Y** — verbatim quote preferred (avoid AI paraphrase drift).
+2. **Search index** (user + project scope) by keyword. Index is in context via `@-import` — title + keywords scan first, body Read only on title-ambiguous candidates.
+3. **If matched** — route to Step 5 strengthening. Announce: *"This is already in index at `<path>`; will strengthen instead of new entry."* Do NOT propose new.
+4. **If novel** — proceed to permanence gate.
+5. **Permanence gate (required ASK)** — T2 has less context than T1 (no plan document to read), so AI MUST explicitly ask: **"Is Y a permanent fact / rule / architectural distinction (capture), or just clarifying this turn (no capture)?"** The wording accommodates descriptive Y (architectural facts the AI didn't know) as well as prescriptive Y (rules). Cannot infer from tone — users state permanent knowledge conversationally.
+6. **If permanent** — run full Capture Step 0–9, with **explicit attention to Step 3 (3-probe split test)**. Novel-reason corrections often span multiple aspects (intent + fact + prescription). Worked example: user clarifies "Iris has three surface types with different activity requirements" → decomposes into an `architecture` entry (why split), a `topology` entry (which-surface-needs-what), and a `lesson` entry (don't collapse them in diagnosis). Default to running all three probes; capture every `yes`-aspect as a cross-referenced entry via `## Related`. Disambiguation field MUST cite source: `"via user correction on YYYY-MM-DD"`.
+7. **If just-for-this-case** — apply Y for current turn only. Tell user: *"Applying Y here. Not capturing — if it recurs, we'll capture next time."*
+
+**Disallowed rationalizations**:
+
+- "User is correcting me, they'll capture if they want" — silent application loses the rule for next session; T2 catches at moment of greatest specificity.
+- "It's just one correction, not worth capturing" — by definition, a novel-reason correction points at an AI-unknown rule. That IS the gap iris-gotcha exists for.
+- "Wait for 记一下" — by the time user remembers to invoke, the conversation has moved on and context is degraded.
+- "Permanent vs. tactical can be inferred from tone" — false; ask explicitly.
 
 ### Triage announcement for user-triggered captures (since v0.8.0)
 
@@ -582,6 +713,62 @@ The user (or AI noticing stale wording on session start) explicitly requests a r
 
 The index is already loaded in your context via `@-import`. Scan it for keyword/title matches and Read the relevant file directly — that's recall. You only need to invoke `action=recall` explicitly when the user wants a broader multi-keyword search across both scopes or when the question is too vague to know what to Read.
 
+### Pre-implementation rule check (since v0.11.0)
+
+The index is loaded via `@-import`, but **loading ≠ attending**. Without an explicit consultation step, AI writes code based on training defaults, even when indexed rules contradict those defaults. T3 makes attention explicit at the highest-leverage moment — before code is written. It is the first **automatic-trigger structured procedure** under `action=recall`.
+
+**Trigger signals (ALL must apply)**:
+
+- AI is about to make code changes that materially affect behavior (new feature, refactor, multi-file work, new endpoint).
+- The current task has not been T3-scanned earlier in this session (session-scoped per-task cache).
+
+**Skip conditions (ANY skips T3)**:
+
+- Trivial edits — single-line change, typo, formatting, comment-only, lint fix.
+- Routine maintenance — dependency bump, version sync, `.gitignore` edits.
+- User explicitly says "skip the rule check" (or equivalent).
+- Same task already T3-scanned and scope unchanged.
+
+**Procedure**:
+
+1. **Identify upcoming task** — express in one short line.
+2. **Keyword scan against index** — use the `[k1, k2, k3]` lists in index lines (already in context via `@-import`).
+3. **Tiered body Read** (this is the token-cost control point):
+   - `severity: critical` or `zero-tolerance` → Read body unconditionally if even loosely matched.
+   - `severity: high` → Read body if keyword match is strong.
+   - Other severities → index line is sufficient unless explicitly relevant.
+4. **Filter on reflection** — drop matches that don't actually apply to this task on second look.
+5. **Announce** — concise output to user. Format:
+
+   ```
+   Pre-implementation check (task: implement /auth/login endpoint)
+     Index scan: 12 entries → 3 matched (keywords: auth, endpoint, jwt)
+     Applying:
+       - rule/2026-05-15-auth-gateway-only.md (critical)
+       - architecture/2026-05-10-jwt-stateless.md
+       - habit/2026-04-20-prefer-zod-validation.md
+     Implementing.
+   ```
+
+   If zero matches: `Pre-implementation check: scanned 12 entries, none matched. Implementing.`
+
+6. **Implement** — listed rules in active attention. Falsifiable: implementation should trace back to cited rules where applicable.
+
+**Token-cost guard — three defenses**:
+
+| Defense | Bounds |
+|---|---|
+| **Tiered body Read** | Only `critical`/`zero-tolerance` entries always Read; lower severities cap at index line |
+| **Session-scoped per-task cache** | One scan per task, not per edit. Cache key = the one-line task description from step 1; cache invalidates when the task substantively changes (different file-set, different feature, user signals a context shift) |
+| **Trivial-task skip** | Small edits don't pay full scan cost |
+
+**Disallowed rationalizations**:
+
+- "Index is in context, I don't need to scan" — being-in-context ≠ attention; the scan IS the attention mechanism.
+- "Task is too small, skip" — small tasks accumulate violations; use the explicit `trivial-task skip` rule, not vague judgment.
+- "I'll check after writing, fix if needed" — defeats the purpose; rules should constrain writing, not validate post hoc.
+- "User said implement, they don't want a pause" — T3 is one short scan, not a dialogue.
+
 ## Audit (`action=audit`)
 
 1. List entries from `~/.claude/iris-gotcha/` (and the project scope if requested).
@@ -607,3 +794,5 @@ Cross-machine sync (automatic pull, conflict resolution) is deliberately out of 
 - **Multi-paragraph prescriptions.** Severity language is meant to be terse and forceful. If a rule needs paragraphs of explanation, it's probably `architecture` (which is descriptive) wearing a rule's clothes.
 - **Capturing noise.** Capture only when one of the triggers fires. The signal-to-noise ratio of the index is more important than catching every possible learning — a noisy index is unreadable.
 - **Classifying from memory.** Definitions evolve. Always Read `definitions.md` before classifying, even if you "remember" how the categories work.
+- **Skipping the permanence gate (T1/T2).** Both T1 and T2 require a permanence question — is this an architectural commitment (capture) or a this-implementation-only / this-turn-only decision (skip)? Skipping the gate and capturing everything pollutes the always-on layer with time-bounded entries that lose relevance fast. The gate is mandatory because plans and corrections both mix permanent + tactical content; the discriminator must be explicit.
+- **T3 scan as ceremony, not attention.** Running the pre-implementation scan and announcing matched rules, but then implementing without actually using those rules to constrain decisions, defeats T3's purpose. The scan IS the attention mechanism — listed rules should trace through to the actual code being written. If the announce reads "Applying: rule X, rule Y" but the implementation ignores them, that's T3 reduced to theater.
