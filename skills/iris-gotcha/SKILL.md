@@ -39,6 +39,7 @@ Capture only when **both** gates pass. If the signal value isn't obvious, defaul
 | **`action=audit`** | Periodic noise removal — finds stale or miscategorized entries |
 | **`action=overview`** | Synthesis layer — replaces N raw architecture/topology entry loads with one digested document |
 | **Active split test (3-probe)** | Avoids hybrid entries that carry multiple weakly-related signals; each entry stays focused |
+| **Doc-follows-code (`references:` + drift check)** | Converts architecture/topology decay from invisible to audit-detectable; prevents stale entries from carrying authoritative-sounding-but-wrong signal |
 | **Markdown-only / no-runtime** | Keeps the plugin itself cheap (no per-session bootstrap cost beyond file read) |
 
 When in doubt about any change to this skill — to a procedure, a category, a default — ask: **would this raise signal density, or lower it?** If you can't articulate the signal answer, the change probably shouldn't ship.
@@ -129,6 +130,8 @@ disambiguation: "why not best-practice: this prescription comes from one specifi
 ```
 
 **Initial capture (no prior incident)**: set `violation_count: 0` and omit `last_violated`. This is the typical shape for a `rule` / `best-practice` / `habit` captured preemptively. The above example shows the post-incident shape (`violation_count: 1`, `last_violated` set to the incident date) — typical for a `lesson` captured right after the mistake.
+
+**Descriptive types** (`architecture` / `topology`): omit `severity` / `last_violated` / `violation_count`; instead add `references: [path1, path2, ...]` listing the code paths the entry depends on (see `## Doc Follows Code` for the discipline). If the referenced code is genuinely inaccessible in this session, set `unverified: true` so future audits re-check.
 
 Body in Markdown. Prescriptive types (`lesson` / `rule` / `habit` / `best-practice`) use:
 
@@ -338,7 +341,7 @@ Two writes, both idempotent.
 
 **Write the entry file**: `~/.claude/iris-gotcha/<category>/YYYY-MM-DD-<kebab-slug>.md` (or the project-scope equivalent). Use the English `<category>` identifier as the directory name. The Write tool creates the parent directory if needed.
 
-For descriptive types (`architecture` / `topology`), omit `severity` / `last_violated` / `violation_count` from frontmatter.
+For descriptive types (`architecture` / `topology`), omit `severity` / `last_violated` / `violation_count`; instead add `references: [path1, path2, ...]` per the `## Doc Follows Code` section (or `unverified: true` in frontmatter if the referenced code is inaccessible in this session).
 
 #### `## Related` body section (mandatory for split entries)
 
@@ -435,6 +438,34 @@ Tell the user, **in this order**:
 If the user pushes back on the type or scope you chose, **do not** silently rewrite the file or recapture. Use `action=move` instead — it properly updates `type` / `scope` / `disambiguation`, regenerates both source and destination indexes, and (if scope changed) wires the destination CLAUDE.md. Silent rewriting loses the audit trail and may leave a stale index entry.
 
 The same applies if you classify differently from a type the user explicitly named at capture time: state the disagreement in Step 9 and offer the move. Don't pre-emptively defer to the user's label without applying definitions.md — that's the rationalization that killed `recipe` last time. But once the disagreement is surfaced and the user maintains their view, *that* is when move runs.
+
+## Doc Follows Code (drift discipline for `architecture` / `topology` entries)
+
+**Activation signal**: writing, strengthening, or auditing any `architecture` or `topology` entry that refers to specific code, files, services, or systems.
+
+**At capture time**:
+
+1. Identify the code the entry describes. Read its current state — not from memory, not from the user's summary.
+2. Add a `references: [path1, path2, ...]` frontmatter field listing the code paths the entry depends on (absolute or project-relative). Used at audit time for mechanized drift detection.
+3. Write the body against the just-read state. Quote concrete paths, function names, or values where they tighten the claim.
+
+**At audit time** (extends `action=audit` step 2):
+
+For each architecture/topology entry, compare each `references:` path's `mtime` against the entry's `last_modified` (or `created`). If any code mtime is newer, flag the entry as "potentially drifted" — surface to user, don't auto-rewrite. Drift detection is suggestive, not authoritative; the user decides whether the code change invalidated the entry.
+
+**Disallowed rationalizations** (each has historically produced stale, misleading entries):
+
+- "The entry looks roughly right, I'll trust it" — a roughly-right architecture entry misleads more than a missing one; the AI cites it confidently in downstream reasoning.
+- "The code changed but the design intent is the same" — usually true; catastrophic when it isn't. Verify against current code, don't reason from memory.
+- "I'll add `references:` later, just want to land the entry now" — at capture time it's ~5 seconds and ground truth; reconstructed later it's often wrong.
+- "Drift will be caught in audit later" — audit fires on explicit user request only; stale entries between audits actively misinform every session that loads the index.
+
+**Fallback** (skipping `references:` is allowed only when):
+
+- The entry is purely conceptual — describes a system property or doctrine, not specific code (e.g. "iris-gotcha is markdown-only"). Leave `references:` empty or omit it; add a one-line note in the body explaining why no specific reference applies.
+- The referenced code is genuinely inaccessible in this session (missing repo, external service, no read permission). Set `unverified: true` in frontmatter so the next audit re-checks.
+
+**Rationale**: `architecture` and `topology` entries describe the world; the world changes; descriptions decay. The same @-import mechanism that makes good entries valuable also makes stale entries actively harmful — the AI cites stale architecture confidently. `references:` is the smallest structural lever that converts drift from "invisible decay" to "audit-detectable signal".
 
 ## Move procedure (`action=move`)
 
@@ -558,6 +589,7 @@ The index is already loaded in your context via `@-import`. Scan it for keyword/
    - `disambiguation` is non-trivial — a vacuous reason like "why not rule: it's not a rule" hints at miscategorization.
    - Type matches body content per `definitions.md`.
    - For prescriptive types, severity isn't laughably out of step with `violation_count` (e.g. count=5 but severity=`low`).
+   - For descriptive types (`architecture` / `topology`): read each `references:` path; if any file's `mtime` is newer than the entry's `last_modified` (or `created` if never modified), flag as "potentially drifted" — surface to user, don't auto-rewrite. See `## Doc Follows Code`.
    - No two entries cover the exact same prescription (potential merge).
 3. Produce a report and let the user decide. Don't auto-fix — moving / strengthening / merging entries during an audit pass tends to overwhelm the user with changes they didn't review.
 
