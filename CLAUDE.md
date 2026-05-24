@@ -10,7 +10,7 @@ A Claude Code plugin that ships one Skill (`iris-gotcha`). Pure Markdown — no 
   marketplace.json     # marketplace registry (CC reads on /plugin marketplace add)
 skills/iris-gotcha/
   SKILL.md             # main skill: triggers + capture/recall/audit/push flows
-  definitions.md       # CANONICAL 7-category taxonomy — edits here ripple to every future classification
+  definitions.md       # CANONICAL 6-category taxonomy — edits here ripple to every future classification
 ```
 
 ## Schema gotchas (don't repeat these)
@@ -42,7 +42,8 @@ Both files must move together — they're independently validated and a mismatch
 
 - [ ] `.claude-plugin/plugin.json` → `version`
 - [ ] `.claude-plugin/marketplace.json` → `metadata.version` AND `plugins[0].version`
-- [ ] Update README's "Versioning" section with changes
+- [ ] Add a new `## vX.Y.Z — ...` section to `CHANGELOG.md` (design rationale, not just bullet list — see existing entries for tone)
+- [ ] Update `README.md` "Versioning" section: bump the `Latest: **vX.Y.Z** — <one-line summary>` line
 - [ ] `git tag v<new>` + push
 - [ ] (optional) GitHub release
 
@@ -62,7 +63,7 @@ Practical implications for contributors:
 
 ## Skill design invariants
 
-- **7 categories are canonical**: `experience` / `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`. Adding/removing requires updates in BOTH `definitions.md` AND the index template inside `SKILL.md`.
+- **6 categories are canonical**: `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`. Adding/removing requires updates in BOTH `definitions.md` AND the index template inside `SKILL.md`. (`experience` was dropped in v0.6.0 — see invariant below.)
 - **Category identifiers are English; Chinese kept as glosses** (since v0.2.0). The `type:` frontmatter field always uses the English identifier. Directory names also use the English identifier.
 - **`disambiguation` frontmatter field is mandatory** on every entry. Removing this field is a regression — the anti-collapse mechanism depends on it.
 - **Severity ladder lives only in `SKILL.md`** (5 levels: `low` / `medium` / `high` / `critical` / `zero-tolerance`). Don't fork this elsewhere.

@@ -11,7 +11,7 @@
     {
       "name": "iris-gotcha",
       "source": "./",
-      "description": "Capture and recall gotchas, rules, architecture, topology, habits, best practices, and lessons learned with strict 7-category typing and rule-strengthening on repeated violations.",
+      "description": "Capture and recall gotchas, rules, architecture, topology, habits, best practices, and lessons learned with strict 6-category typing and rule-strengthening on repeated violations.",
       "version": "0.11.0",
       "author": {
         "name": "Daniel Wei"
