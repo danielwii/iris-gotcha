@@ -58,3 +58,31 @@ violation #N、facet 追加）。只有升级器，没有降级器——没有�
 - 不做自动定时后台整理（无人监督的写者，已在 mission-ai 会话中否决）。
 - 不为终态判定引入外部 classifier；裁决在读取现场由当前模型做。
 - 不改变现有捕获/强化机制——只补退出路径。
+
+## 引擎自身的循环完善（violation 双重归因 + 形式升级阶梯）
+
+现状：内容有循环（violation → strengthen），引擎没有——引擎演进
+（v0.6→v0.12）全靠人在会话中发现缺口后手动修改，无系统归因。
+
+**证据：现有强化循环正在用引擎自己记载的失败方式失败。**
+proxy-as-fact 三次违规（high→critical→zero-tolerance），每次强化 =
+加重措辞；而 index 内 2026-07-02 lesson 明载「prompt 嘱咐一句 ≠ 必填
+字段（4/4→0/4），散文指令会被稀释」。升 severity 就是把嘱咐加粗重说。
+对照：contract-generate 教训未加重措辞、而是升华为 submodule-workflow
+Step 4b（结构化步骤），起效。按三分法：连续违规仍加码同一手段 =
+给错误的抽象打补丁，收敛闸应触发。
+
+设计：
+
+1. **violation 双重归因**：每次违规事件问两层——
+   ① 内容缺口（lesson 不对/不全）→ 现有 strengthen；
+   ② 交付缺口（lesson 对，散文形式送达不了）→ 归因引擎。
+2. **形式升级阶梯**（封顶散文强化）：
+   - #1 记录（散文）
+   - #2 强化（允许一次）
+   - **#3 禁止再强化散文**，强制换形式：升华为目标项目/skill 的结构
+     （checklist 项、rule、hook、类型约束、structured-output 必填字段），
+     lesson 标 `superseded_by`；纯判断类换不了结构的，至少换载体
+     （进对应 skill 的红旗表 / rationalization table）。
+3. **引擎闭环记录** = 现有 repo + CHANGELOG：每次 #3 触发的形式升级
+   都是一次 engine/content 协同演进，有版本、有 diff、可回看。
