@@ -147,7 +147,11 @@ Budget (soft = should stay under during Step 6.5 self-check; hard = Step 8 regen
 | `keywords` count | 4 | 5 |
 | each keyword | 24 code points | 40 code points |
 | rendered index line (title + keywords + severity, excluding path) | 160 code points | 220 code points |
-| whole `index.md` | 24,000 characters | 32,000 characters |
+| whole `index.md` | 24,000 code points | 32,000 code points |
+
+All budgets are counted in **Unicode code points**, never bytes — a CJK notebook is ~3× larger in UTF-8 bytes than in code points, so the two units disagree about whether the same file is over budget.
+
+The whole-file budget is an **entry-count backstop**, not a verbosity backstop: the per-line budget binds first (at 220 code points/line, the file can't reach 32,000 until ~145 entries). If the file is over budget while every line is within its own budget, the notebook has too many entries — the fix is `action=audit` and deletion, not further compression.
 
 Example (prescriptive, scenario-qualified):
 ```yaml
@@ -602,19 +606,29 @@ Regeneration is a **pure function of the entry files** — never read or carry f
    - Prescriptive: `- **{index_cue}** [{keywords}] severity:{severity} → \`{path}\``
    - Descriptive: `- **{index_cue}** [{keywords}] → \`{path}\``
    - `Recently strengthened` entries additionally append ` · violated {last_violated}`.
-4. **Validate before writing**:
+4. **Validate before writing — schema presence first, then budgets**:
 
-   | Check | Hard budget |
-   |---|---:|
+   | Check | Requirement |
+   |---|---|
+   | Entry has a frontmatter block at all | every entry |
+   | `index_cue` present and non-empty | every entry |
+   | `type` present, and matching the entry's category directory | every entry |
+   | `keywords` present and non-empty | every entry |
    | Each `index_cue` | ≤ 100 code points |
    | Each entry's keyword count | ≤ 5 |
    | Each rendered line, excluding path | ≤ 220 code points |
-   | Whole file | ≤ 32,000 characters |
+   | Whole file | ≤ 32,000 code points |
 
-   **If any hard budget is exceeded: do not write the file.** Report which entries are over budget and by how much, and stop. The fix is to shorten `index_cue`/`keywords` on the offending entries (Step 6.5) or split them (Step 0.5) — never truncate text or silently drop low-severity entries during regeneration.
+   **If any check fails: do not write the file.** Report the offending entry paths — which check each failed, and by how much for budget failures — and stop.
+
+   **Run the presence checks before the budget checks, and never let a budget pass stand in for them.** A missing field trivially satisfies every budget (there is no text to measure), so a budget-only validation reports "no violations" on a notebook whose entries have no `index_cue` at all. `index_cue` is declared mandatory in the frontmatter spec; this step is the only thing that enforces that declaration.
+
+   **Never substitute for a missing `index_cue` by summarizing the entry body.** Step 8 does not read bodies by design — improvising a cue at regeneration time reintroduces exactly the unbudgeted, unreviewed natural language that `index_cue` exists to keep out of the index, and it does so invisibly. The fix for a missing field is to backfill it on the entry (Step 6.5), never to synthesize one here.
+
+   For budget failures the fix is to shorten `index_cue`/`keywords` on the offending entries (Step 6.5) or split them (Step 0.5) — never truncate text or silently drop low-severity entries during regeneration.
 5. Report line counts before/after and any validation failures, per the format in Step 9.
 
-Soft budgets (`index_cue` ≤ 60, keywords ≤ 4, line ≤ 160, whole file ≤ 24,000) are advisory — regeneration still writes the file if only soft budgets are exceeded, but the report should note which entries are over the soft budget so the next `action=audit` can review them.
+Soft budgets (`index_cue` ≤ 60, keywords ≤ 4, line ≤ 160, whole file ≤ 24,000 code points) are advisory — regeneration still writes the file if only soft budgets are exceeded, but the report should note which entries are over the soft budget so the next `action=audit` can review them.
 
 ### 9. Report
 
@@ -842,7 +856,8 @@ The index is loaded via `@-import`, but **loading ≠ attending**. Without an ex
 ## Audit (`action=audit`)
 
 1. List entries from `~/.claude/iris-gotcha/` (and the project scope if requested).
-2. Read each. Check:
+2. Read each. Check, **in this order** — schema completeness gates the rest:
+   - **Schema completeness** (first): does the entry have a frontmatter block at all, and does it carry every mandatory field — `type`, `title`, `index_cue`, `keywords`, `scope`, `created`, `disambiguation`, plus `severity` / `violation_count` for prescriptive types and `references` for descriptive ones? Report missing fields by entry path. **The Applicability and Atomicity checks below both read `index_cue`; on an entry that lacks it they have nothing to evaluate and must be reported as `blocked`, never as passing.** An audit that silently skips its own semantic checks on entries missing the field reports a clean bill of health on a notebook that has none — state how many entries each check actually ran against, not just how many flags it raised.
    - `disambiguation` is non-trivial — a vacuous reason like "why not rule: it's not a rule" hints at miscategorization.
    - Type matches body content per `definitions.md`.
    - For prescriptive types, severity isn't laughably out of step with `violation_count` (e.g. count=5 but severity=`low`).
