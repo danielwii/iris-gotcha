@@ -144,10 +144,12 @@ Budget (soft = should stay under during Step 6.5 self-check; hard = Step 8 regen
 | Field | Soft | Hard |
 |---|---:|---:|
 | `index_cue` | 60 code points | 100 code points |
-| `keywords` count | 4 | 5 |
+| `keywords` count **rendered into the index** | 4 | 5 |
 | each keyword | 24 code points | 40 code points |
 | rendered index line (title + keywords + severity, excluding path) | 160 code points | 220 code points |
 | whole `index.md` | 24,000 code points | 32,000 code points |
+
+The `keywords` row budgets what **reaches the index** (Step 8 renders the first 5), not how many an entry stores — store as many as retrieval needs, ordered most-distinctive-first.
 
 All budgets are counted in **Unicode code points**, never bytes — a CJK notebook is ~3× larger in UTF-8 bytes than in code points, so the two units disagree about whether the same file is over budget.
 
@@ -598,6 +600,8 @@ The grep-then-append pattern is what makes this idempotent — running on every 
 Regeneration is a **pure function of the entry files** — never read or carry forward text from the existing `index.md`. This matters: if the old index contains stale wording, augmented cues, or duplicated entries, re-reading it as a starting point reproduces the same bloat. Always rebuild from scratch off frontmatter.
 
 1. **Read `index_cue`, `keywords` (first 5 only), `type`, `severity`, `last_violated`, `violation_count`, and file path from every entry's frontmatter** in the target scope. Do not read entry bodies for this step — the whole point of `index_cue` is that regeneration doesn't need to summarize anything.
+
+   **The 5-keyword truncation is load-bearing, not a nicety, and it is what the budget is enforced against.** Entries may store as many `keywords` as their author finds useful for retrieval; only the first 5 are rendered, so the rest cost the always-on index nothing. Measured on a 30-entry notebook: rendering every stored keyword puts 12 of 30 lines over the 220-code-point line budget (longest 532) — i.e. an index that can never be written — while rendering the first 5 puts 0 of 30 over. Truncating is therefore the precondition for the line budget being satisfiable at all; it is not an alternative to it. Order `keywords` most-distinctive-first, since position decides what reaches the index.
 2. **Placement — each entry appears exactly once**:
    - `type` ∈ {`lesson`,`rule`,`habit`,`best-practice`} AND `last_violated` is set AND within the last 7 days → place in `## ⚠️ Recently strengthened` **only**.
    - Otherwise → place in its `## <type>` category section **only**.
@@ -615,9 +619,11 @@ Regeneration is a **pure function of the entry files** — never read or carry f
    | `type` present, and matching the entry's category directory | every entry |
    | `keywords` present and non-empty | every entry |
    | Each `index_cue` | ≤ 100 code points |
-   | Each entry's keyword count | ≤ 5 |
+   | Each rendered line's keyword count | ≤ 5 — guaranteed by step 1's truncation, so this cannot fail |
    | Each rendered line, excluding path | ≤ 220 code points |
    | Whole file | ≤ 32,000 code points |
+
+   Note what the keyword row does **not** say: it budgets the *rendered* count, not how many keywords an entry stores. An entry with 22 keywords is not a write failure — step 1 renders 5 of them and the other 17 never reach the index. Treating the stored count as a hard budget would force deleting real search terms from entries to produce an index byte-for-byte identical to the one truncation already produces. If you want stored keyword lists trimmed for their own sake, that is an `action=audit` soft-budget suggestion (soft: 4), never a regeneration refusal.
 
    **If any check fails: do not write the file.** Report the offending entry paths — which check each failed, and by how much for budget failures — and stop.
 

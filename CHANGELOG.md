@@ -2,6 +2,18 @@
 
 Each entry explains *what changed* and *why* — design rationale, not just bullet-point release notes. Reverse chronological.
 
+## v0.12.2 — the keyword budget belongs to the rendered line, not to the entry
+
+Step 8 contradicted itself. Step 1 read `keywords` **first 5 only** — a render-time truncation. Step 4 then validated `Each entry's keyword count ≤ 5` as a hard budget, i.e. a write failure. Only one of the two can be operative: if the budget refuses, truncation is unreachable dead text; if truncation happens, the budget can never fail. On the user-scope notebook this was not academic — **26 of 29 entries stored more than 5 keywords** (the largest had 22), so under the refusing reading no index could ever be written until keywords were deleted from most of the notebook.
+
+Measurement settled it. Rendering every stored keyword puts **12 of 30 lines over the 220-code-point line budget** (longest 532) — an index that is structurally unwritable. Rendering the first 5 puts **0 of 30** over. Truncation is not an alternative to the line budget; it is the precondition for the line budget being satisfiable. And because both readings produce a **byte-identical index** (4.3k tokens either way), enforcing the stored count as a hard budget would have meant irreversibly deleting real search terms from 26 entries to obtain exactly the index truncation already produces.
+
+So the keyword budget now reads as what it always had to be: a bound on the **rendered** line, guaranteed by step 1's truncation and therefore unable to fail. Entries may store as many keywords as retrieval warrants, ordered most-distinctive-first since position decides what reaches the index. Trimming stored lists remains available as an `action=audit` soft-budget suggestion — never a regeneration refusal.
+
+This is the fourth defect of this shape found in v0.12.0's budget machinery, after the missing presence check, the undefined unit, and the undocumented whole-file semantics (all v0.12.1). The common root: budgets were written as a table of numbers without stating **which artifact each number governs** — the stored entry, the rendered line, or the finished file.
+
+Spec-only change. No schema change, no migration.
+
 ## v0.12.1 — enforce the mandatory field; a declaration is not a guardrail
 
 v0.12.0 declared `index_cue` "mandatory on every entry" and then never checked for it. Step 8's validation table held four budget rows and no presence row; `action=audit`'s Applicability and Atomicity checks both *read* `index_cue`, silently presupposing it exists. The gap is invisible by construction, because **a missing field trivially satisfies every budget** — there is no text to measure, so a budget-only pass reports "no violations" on a notebook where no entry has the field at all.
