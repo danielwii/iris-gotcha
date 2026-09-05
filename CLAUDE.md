@@ -10,7 +10,7 @@ A Claude Code plugin that ships one Skill (`iris-gotcha`). Pure Markdown — no 
   marketplace.json     # marketplace registry (CC reads on /plugin marketplace add)
 skills/iris-gotcha/
   SKILL.md             # main skill: triggers + capture/recall/audit/push flows
-  definitions.md       # CANONICAL 6-category taxonomy — edits here ripple to every future classification
+  definitions.md       # CANONICAL 7-category taxonomy — edits here ripple to every future classification
 ```
 
 ## Schema gotchas (don't repeat these)
@@ -42,8 +42,7 @@ Both files must move together — they're independently validated and a mismatch
 
 - [ ] `.claude-plugin/plugin.json` → `version`
 - [ ] `.claude-plugin/marketplace.json` → `metadata.version` AND `plugins[0].version`
-- [ ] Add a new `## vX.Y.Z — ...` section to `CHANGELOG.md` (design rationale, not just bullet list — see existing entries for tone)
-- [ ] Update `README.md` "Versioning" section: bump the `Latest: **vX.Y.Z** — <one-line summary>` line
+- [ ] Update README's "Versioning" section with changes
 - [ ] `git tag v<new>` + push
 - [ ] (optional) GitHub release
 
@@ -63,7 +62,7 @@ Practical implications for contributors:
 
 ## Skill design invariants
 
-- **6 categories are canonical**: `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`. Adding/removing requires updates in BOTH `definitions.md` AND the index template inside `SKILL.md`. (`experience` was dropped in v0.6.0 — see invariant below.)
+- **7 categories are canonical**: `experience` / `lesson` / `rule` / `architecture` / `topology` / `habit` / `best-practice`. Adding/removing requires updates in BOTH `definitions.md` AND the index template inside `SKILL.md`.
 - **Category identifiers are English; Chinese kept as glosses** (since v0.2.0). The `type:` frontmatter field always uses the English identifier. Directory names also use the English identifier.
 - **`disambiguation` frontmatter field is mandatory** on every entry. Removing this field is a regression — the anti-collapse mechanism depends on it.
 - **Severity ladder lives only in `SKILL.md`** (5 levels: `low` / `medium` / `high` / `critical` / `zero-tolerance`). Don't fork this elsewhere.
@@ -91,6 +90,7 @@ Practical implications for contributors:
 - **End-of-planning retrospective fires at planning-arc end, mirrors end-of-debug** (since v0.11.0). Multi-turn architectural discussion converging → AI scans the artifact, runs the 3-probe split, pre-classifies each candidate as `permanent` (architectural commitment, capture) vs. `tactical` (this-implementation-only, skip), surfaces a structured proposal for per-candidate user confirmation. The permanence gate is the load-bearing innovation: without it, T1 pollutes the always-on layer with time-bounded decisions that lose relevance fast.
 - **Novel-reason correction = missing-rule signal, not just one-off feedback** (since v0.11.0). When the user corrects AI with a stated reason absent from the index, that IS the gap iris-gotcha exists for. T2 captures at the moment of greatest specificity; the permanence gate must be explicitly asked (no tone inference) and is worded to accommodate descriptive Y (architectural facts the AI didn't know) as well as prescriptive Y (rules). Existing Step 5 strengthening handles the orthogonal case (reason Y already in index → strengthen, don't add new).
 - **Pre-implementation rule check is the first automatic-trigger of `action=recall`** (since v0.11.0). The @-imported index being in context ≠ AI attending to it; T3 makes attention an explicit structured step at the highest-leverage moment (before code is written). Token cost is controlled via three defenses: tiered body Read (only `critical`/`zero-tolerance` always Read full body), session-scoped per-task cache (one scan per task, not per edit), and trivial-task skip (small edits don't pay full scan cost).
+- **`index_cue` is the only natural language regeneration may copy into the index** (since v0.12.0). Every entry's frontmatter carries an `index_cue` — a budget-checked single sentence (prescriptive: scenario + constraint; descriptive: shortest current-state fact). Step 8 regeneration reads frontmatter only, never the old `index.md`, and refuses to write the file if any entry exceeds the hard budget (cue 100 code points, 5 keywords, 220-char rendered line, 32,000-char whole file) — this is a write failure to be fixed by shortening or splitting the entry, not a truncation trigger. Two new capture gates (Step 0.5 scenario-behavior atomicity, Step 0.6 world-state vs behavioral-constraint) and a tightened Step 5 strengthening comparison (same scenario + same constraint, not just same topic) exist to keep entries from drifting into the mixed, budget-busting shape that motivated this version — a single `lesson` entry that had absorbed two unrelated scenario→constraint mappings across 179 lines and grown the whole project-scope index to 57.8k characters.
 
 ## What this plugin is NOT
 

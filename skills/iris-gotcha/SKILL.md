@@ -119,6 +119,7 @@ Entry frontmatter:
 ---
 type: lesson                          # one of: lesson | rule | architecture | topology | habit | best-practice
 title: "Bun on macOS needs sudo to install global packages"
+index_cue: "On macOS, global bun package installs require sudo; use bunx instead"
 keywords: [bun, macos, install, global, permission]
 scope: user                           # user | project
 severity: medium                      # low | medium | high | critical | zero-tolerance — prescriptive types only
@@ -132,6 +133,33 @@ disambiguation: "why not best-practice: this prescription comes from one specifi
 **Initial capture (no prior incident)**: set `violation_count: 0` and omit `last_violated`. This is the typical shape for a `rule` / `best-practice` / `habit` captured preemptively. The above example shows the post-incident shape (`violation_count: 1`, `last_violated` set to the incident date) — typical for a `lesson` captured right after the mistake.
 
 **Descriptive types** (`architecture` / `topology`): omit `severity` / `last_violated` / `violation_count`; instead add `references: [path1, path2, ...]` listing the code paths the entry depends on (see `## Doc Follows Code` for the discipline). If the referenced code is genuinely inaccessible in this session, set `unverified: true` so future audits re-check.
+
+**`index_cue`** (mandatory on every entry, prescriptive and descriptive alike): the *only* natural-language text that regeneration (Step 8) is allowed to copy into `index.md`. Everything else in an index line — path, keywords, severity — is copied mechanically from other frontmatter fields; `title` never appears in the index and can stay as detailed as the entry needs.
+
+- **Prescriptive types** (`lesson` / `rule` / `habit` / `best-practice`): must read as *scenario + constraint* in one sentence. If the constraint is unconditionally true regardless of project state, the scenario clause can be omitted. But if the constraint only applies when a particular tool, mechanism, or environment is in play (e.g. "if using ArgoCD kustomize image override..."), the scenario clause is mandatory. Never phrase `index_cue` as a bare statement of current project state ("prod uses ArgoCD") when the actual claim is conditional on that state — that formulation silently goes wrong the moment the project's actual mechanism changes, and nothing will catch the staleness. See Step 0.6 for the underlying discipline this enforces.
+- **Descriptive types** (`architecture` / `topology`): the shortest accurate statement of current project state, or the one design distinction that differentiates this entry from a default assumption. No conditional clause needed — descriptive entries state facts; prescriptive entries react to them.
+
+Budget (soft = should stay under during Step 6.5 self-check; hard = Step 8 regeneration refuses to write the index and reports the offending entry instead):
+
+| Field | Soft | Hard |
+|---|---:|---:|
+| `index_cue` | 60 code points | 100 code points |
+| `keywords` count | 4 | 5 |
+| each keyword | 24 code points | 40 code points |
+| rendered index line (title + keywords + severity, excluding path) | 160 code points | 220 code points |
+| whole `index.md` | 24,000 characters | 32,000 characters |
+
+Example (prescriptive, scenario-qualified):
+```yaml
+index_cue: "If the CD mechanism is ArgoCD kustomize image override, the image key MUST be the full ECR URI (not a short name), and the resulting Deployment image must be verified"
+```
+
+Example (descriptive, current-state statement):
+```yaml
+index_cue: "v2 is currently deployed via manual rollout; ArgoCD is installed but not yet the CD mechanism"
+```
+
+`index_cue` has no language requirement — write it in whatever language the rest of the project's notebook uses. The requirement is structural (scenario + constraint, or shortest current-state fact), not linguistic.
 
 Body in Markdown. Prescriptive types (`lesson` / `rule` / `habit` / `best-practice`) use:
 
@@ -358,6 +386,30 @@ Do capture:
 
 The notebook is a supplement to training, not a re-statement of it. If capturing this entry would, after the fact, feel like "the AI didn't need to be told this", you guessed wrong at this step — go back and skip.
 
+### 0.5. Scenario-behavior atomicity gate
+
+Before drafting anything, check whether the knowledge can be stated as **one sentence** of the form "in scenario S, do/avoid X" (prescriptive types) or one sentence of fact (descriptive types). Step 6.5 re-applies this exact test to the drafted `index_cue` later — running it here, before drafting the full entry, avoids writing a whole entry that then fails the later check.
+
+- **Can state it in one sentence** → proceed normally through Step 1 onward.
+- **Needs "if A then X; if B then Y"** → this is two (or more) entries wearing one trenchcoat. Split into separate candidates now, and run each candidate through Step 0 and this gate independently before continuing. Do not draft a single entry that tries to cover both scenarios "for completeness" — that's the failure mode that produced a single `lesson` entry mixing "web+scheduler deployments must release together" (constraint independent of deploy tooling) with "ArgoCD kustomize image keys must be the full URI" (constraint conditional on using ArgoCD), discovered during a 2026-07 index-compact audit where the merged entry had grown to 179 lines and 4 unrelated "violations" across two different rules.
+- **Can state it in one sentence, but the sentence exceeds the `index_cue` hard budget** (see the frontmatter spec above) → usually the same problem in disguise: the sentence needed the extra length because it was silently covering more than one behavioral branch. Re-examine before assuming it's merely verbose.
+
+### 0.6. World-state vs behavioral-constraint gate
+
+Ask: does this knowledge describe **what the project currently is** (a fact that can change independently of anyone's actions — which CD tool is wired up, which auth flow a service uses, which environment is live) or **what must happen in a given scenario** (a constraint that holds regardless of the project's current state)?
+
+- **World state** ("we currently deploy via ArgoCD", "v2 has no read replica yet") → must be `architecture` or `topology`, never folded into a `lesson`/`rule` prescription as an unstated premise.
+- **Behavioral constraint** ("if deploying via ArgoCD kustomize override, the image key must be the full URI") → prescriptive type, and the scenario clause must be explicit in both the body and the `index_cue` (see the frontmatter spec above) — never assume "the current project state" as an implicit precondition.
+
+The two are related but must not collapse into each other. A common failure: a prescriptive entry's prescription is written as if the world-state premise were permanent ("prod uses ArgoCD, so always run `argocd app set`"), when the premise is actually a fact that can change (the project switches CD mechanisms) while the underlying constraint (full-URI image keys, *if* ArgoCD is in play) remains valid indefinitely. Writing the world-state fact as a separate `architecture`/`topology` entry, and writing the prescriptive entry with an explicit conditional clause, keeps the prescription correct even after the world-state fact changes — and keeps the world-state fact itself auditable independently (via `references:` and `action=audit`'s drift check, see `## Doc Follows Code`) instead of buried as an assumption inside a lesson that has no drift-detection mechanism at all.
+
+If a draft entry fails this gate (mixes both), split it: the world-state half becomes (or updates) an `architecture`/`topology` entry; the constraint half becomes a prescriptive entry with an explicit scenario clause, cross-referenced via `## Related`.
+
+**Disallowed rationalizations**:
+
+- "It's basically the same thing, I'll just write both branches in one cue" — see Step 0.5; write two entries instead.
+- "The current CD mechanism is obviously ArgoCD, I don't need to say so" — that's exactly the assumption Step 0.6 exists to catch; make it explicit or split the fact into a separate `architecture`/`topology` entry.
+
 ### 1. Re-read `definitions.md`
 
 Read the sibling file. Definitions evolve, and the prior plugin's failures came from classifying-from-memory.
@@ -410,18 +462,25 @@ If you can't articulate a real difference, the classification is suspect — ret
 
 ### 5. Check for existing related entries (strengthening gate)
 
-Read the relevant `index.md` (user index always; project index too if scope=project). Look for entries sharing keywords or addressing the same underlying concept. For each candidate, Read the full file. Then decide:
+Read the relevant `index.md` (user index always; project index too if scope=project). Look for entries sharing keywords or addressing the same underlying concept. For each candidate, Read the full file. Then compare **scenario** and **behavioral constraint** explicitly — not just topic:
 
-| Relationship | Action |
-|---|---|
-| **Identical content, same prescription** | If the trigger was a violation (you were about to repeat the mistake), go to Step 6 to strengthen. Otherwise update `last_confirmed` and stop. |
-| **Same topic, contradictory prescription** | Stop and surface to the user. Silent overwrite would destroy information. |
-| **Related but distinct** | Continue to Step 7. Cross-reference the related entry in the body. |
-| **No match** | Continue to Step 7. |
+> Write one line for the existing entry's scenario+constraint, and one line for the new content's scenario+constraint. Compare them literally, side by side, before deciding.
+
+| Existing entry | New content | Action |
+|---|---|---|
+| Same scenario, same constraint | Same scenario, same constraint | Step 6: strengthen. New evidence goes in the body; `index_cue` may be reworded for clarity but must not gain a new scenario branch. |
+| Same scenario, contradictory constraint | — | Stop and surface to the user. Silent overwrite would destroy information. |
+| Same scenario, different (non-contradictory) constraint | — | New entry, `## Related` cross-reference. Do **not** strengthen — this is "same topic, different rule", the exact failure mode that produced a mixed web+scheduler/ArgoCD entry (see Step 0.5's incident note). |
+| Different scenario (even if topically similar, e.g. both about deployment) | — | New entry, regardless of topical similarity. Do not strengthen. |
+| No match on scenario or constraint | — | Continue to Step 7 as a fresh entry. |
+
+"Topically related" is not the test. Two entries about deployment, or two entries surfaced by the same incident, can still have different scenarios or different constraints and must stay separate entries.
 
 ### 6. Strengthen (instead of duplicate)
 
 Applies only to prescriptive types (`lesson` / `rule` / `habit` / `best-practice`). Descriptive types (`architecture` / `topology`) accumulate by editing or by adding new entries — there's no "severity" to bump.
+
+Before touching the file, confirm Step 5 actually reached "same scenario, same constraint" — don't strengthen on topical resemblance alone. If you skipped writing out the two comparison lines in Step 5, go back and write them now; strengthening is the highest-risk step for silently absorbing an unrelated scenario into an existing entry's `index_cue`.
 
 1. Bump severity one level (capped at `zero-tolerance`).
 2. Set `last_violated` to today; increment `violation_count`.
@@ -465,6 +524,14 @@ Two anchoring rules:
 If an entry reaches `zero-tolerance` and *still* keeps getting violated, the prescription has saturated — louder text won't help. The real next step is outside iris-gotcha: a structural fix that removes the choice (lint rule, pre-commit hook, CI check, IDE save action, snippet, project scaffold). The brain has been told; the prescription needs to leave the brain and live in tooling.
 
 When you strengthen an entry into `zero-tolerance`, surface this in Step 9: suggest the concrete structural fix that would obviate the rule.
+
+### 6.5. Write and self-check the `index_cue`
+
+1. Draft the `index_cue` candidate per the rules in the frontmatter spec (scenario + constraint for prescriptive types; shortest current-state fact for descriptive types).
+2. Count code points against the budget table (frontmatter spec, above): soft 60 / hard 100 for the cue itself.
+3. Check it doesn't fail Step 0.6: does it state a project's current state as a bare fact when the actual claim is conditional on that state? If so, rewrite with an explicit "if X" clause, or split the current-state fact into its own `architecture`/`topology` entry first and reference the condition from the prescriptive cue.
+4. If the cue still can't be written as one clean sentence, or still exceeds the hard budget after rewriting, return to Step 0.5 — the entry is probably not atomic and needs splitting, not further compression.
+5. Only once the cue passes 2–4, proceed to Step 7.
 
 ### 7. Write the entry and wire injection
 
@@ -524,27 +591,30 @@ The grep-then-append pattern is what makes this idempotent — running on every 
 
 ### 8. Regenerate the index
 
-Rewrite the relevant `index.md` from the current set of entry files. Format:
+Regeneration is a **pure function of the entry files** — never read or carry forward text from the existing `index.md`. This matters: if the old index contains stale wording, augmented cues, or duplicated entries, re-reading it as a starting point reproduces the same bloat. Always rebuild from scratch off frontmatter.
 
-```markdown
-# iris-gotcha Index — User Scope
+1. **Read `index_cue`, `keywords` (first 5 only), `type`, `severity`, `last_violated`, `violation_count`, and file path from every entry's frontmatter** in the target scope. Do not read entry bodies for this step — the whole point of `index_cue` is that regeneration doesn't need to summarize anything.
+2. **Placement — each entry appears exactly once**:
+   - `type` ∈ {`lesson`,`rule`,`habit`,`best-practice`} AND `last_violated` is set AND within the last 7 days → place in `## ⚠️ Recently strengthened` **only**.
+   - Otherwise → place in its `## <type>` category section **only**.
+   - `architecture` / `topology` entries never appear in `Recently strengthened` (they have no `last_violated`).
+3. **Render each line mechanically** — no added prose beyond the fields listed in step 1:
+   - Prescriptive: `- **{index_cue}** [{keywords}] severity:{severity} → \`{path}\``
+   - Descriptive: `- **{index_cue}** [{keywords}] → \`{path}\``
+   - `Recently strengthened` entries additionally append ` · violated {last_violated}`.
+4. **Validate before writing**:
 
-> Auto-maintained by iris-gotcha. For full content, Read the file path.
+   | Check | Hard budget |
+   |---|---:|
+   | Each `index_cue` | ≤ 100 code points |
+   | Each entry's keyword count | ≤ 5 |
+   | Each rendered line, excluding path | ≤ 220 code points |
+   | Whole file | ≤ 32,000 characters |
 
-## ⚠️ Recently strengthened (last 7 days)
-- (sorted by last_violated, most recent first)
+   **If any hard budget is exceeded: do not write the file.** Report which entries are over budget and by how much, and stop. The fix is to shorten `index_cue`/`keywords` on the offending entries (Step 6.5) or split them (Step 0.5) — never truncate text or silently drop low-severity entries during regeneration.
+5. Report line counts before/after and any validation failures, per the format in Step 9.
 
-## lesson (教训) — lessons from specific mistakes
-- **<title>** [k1, k2, k3] severity:<sev> → `<path>`
-
-## rule (规则) — non-negotiable rules
-...
-
-## architecture (架构), topology (拓扑), habit (习惯), best-practice (最佳实践)
-...
-```
-
-Keep each line short (title + 3–5 keywords + severity + path). The index sits in every session's context via `@-import`, so token cost compounds.
+Soft budgets (`index_cue` ≤ 60, keywords ≤ 4, line ≤ 160, whole file ≤ 24,000) are advisory — regeneration still writes the file if only soft budgets are exceeded, but the report should note which entries are over the soft budget so the next `action=audit` can review them.
 
 ### 9. Report
 
@@ -778,6 +848,9 @@ The index is loaded via `@-import`, but **loading ≠ attending**. Without an ex
    - For prescriptive types, severity isn't laughably out of step with `violation_count` (e.g. count=5 but severity=`low`).
    - For descriptive types (`architecture` / `topology`): read each `references:` path; if any file's `mtime` is newer than the entry's `last_modified` (or `created` if never modified), flag as "potentially drifted" — surface to user, don't auto-rewrite. See `## Doc Follows Code`.
    - No two entries cover the exact same prescription (potential merge).
+   - **Applicability**: for prescriptive entries, does `index_cue` (or the body's prescription) state a scenario, or does it silently assume "current project state" as the scenario (words like "prod" / "current" / "now" without an "if X" / "when X" clause)? If the entry has a sibling `architecture`/`topology` entry describing the relevant world-state fact but the prescriptive `index_cue` doesn't reference the condition, flag as "applicability unclear — may be stating world-state as a permanent premise" (Step 0.6).
+   - **Atomicity**: does `index_cue` contain more than one "if X then Y" branch? Does the body read like multiple different scenarios each with their own fix (e.g. separately-numbered incidents each describing a different mechanism)? Flag as "possibly mixed — consider splitting" (Step 0.5, applied retroactively).
+   - **Recent-region eligibility**: for the `## ⚠️ Recently strengthened` section specifically, confirm every listed entry is prescriptive AND has `last_violated` within the last 7 days AND does not also appear in its category section below (Step 8 placement rule). Flag any violation of these three conditions by entry path.
 3. Produce a report and let the user decide. Don't auto-fix — moving / strengthening / merging entries during an audit pass tends to overwhelm the user with changes they didn't review.
 
 ## Push (`action=push`)
@@ -796,3 +869,5 @@ Cross-machine sync (automatic pull, conflict resolution) is deliberately out of 
 - **Classifying from memory.** Definitions evolve. Always Read `definitions.md` before classifying, even if you "remember" how the categories work.
 - **Skipping the permanence gate (T1/T2).** Both T1 and T2 require a permanence question — is this an architectural commitment (capture) or a this-implementation-only / this-turn-only decision (skip)? Skipping the gate and capturing everything pollutes the always-on layer with time-bounded entries that lose relevance fast. The gate is mandatory because plans and corrections both mix permanent + tactical content; the discriminator must be explicit.
 - **T3 scan as ceremony, not attention.** Running the pre-implementation scan and announcing matched rules, but then implementing without actually using those rules to constrain decisions, defeats T3's purpose. The scan IS the attention mechanism — listed rules should trace through to the actual code being written. If the announce reads "Applying: rule X, rule Y" but the implementation ignores them, that's T3 reduced to theater.
+- **Strengthening on topical resemblance.** "This is another deployment-related gotcha" is not the same test as "same scenario, same constraint" (Step 5). Strengthening on topic alone is how a single `lesson` entry absorbed two unrelated scenario→constraint mappings (paired-deployment release discipline, and ArgoCD image-key format) across several "violations" that were actually two different rules.
+- **World-state premises baked into a prescription.** Writing "prod uses ArgoCD, so always X" instead of "if the CD mechanism is ArgoCD, then X" makes the entry silently wrong the moment the project's actual mechanism changes — and nothing will flag it, because the prescription doesn't reference a fact `action=audit`'s drift check can verify. State the world-state fact as its own `architecture`/`topology` entry (with `references:`) and make the prescriptive entry's scenario clause explicit instead (Step 0.6).
