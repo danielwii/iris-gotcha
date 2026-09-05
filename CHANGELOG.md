@@ -2,6 +2,29 @@
 
 Each entry explains *what changed* and *why* — design rationale, not just bullet-point release notes. Reverse chronological.
 
+## v0.12.3 — parse the YAML, don't slice the line
+
+Step 8's step 1 said to "read `index_cue` … from every entry's frontmatter" and never said what *reading* means. Frontmatter is YAML, where a double-quoted scalar carries escapes that belong to the source syntax rather than to the value — but the cheapest way to obey "read the field" is to take the text between the first and last `"` on the line, and that is wrong for any cue containing a quote.
+
+One entry in a 35-entry notebook triggered it. Stored:
+
+```yaml
+index_cue: "插件与 marketplace.json 同仓时 source 必须写字符串 \"./\""
+```
+
+Rendered into the index as `…source 必须写字符串 \"./\` — the `\` escapes survived into the always-on layer, a trailing character was eaten, and the closing `**` was left unpaired because `\*` reads as an escaped asterisk. **The entry existed to say that `source` must be the string `"./"`, and the index destroyed precisely that string.** A knowledge entry whose own subject is a quoted literal is exactly the case this bug corrupts, so the damage lands where it is least affordable.
+
+Two changes, and the second is the load-bearing one:
+
+- **Step 1** now states that "read" means decode the YAML scalar — strip the quoting syntax and resolve escapes before the value reaches step 3's render template; a `"` inside a cue must appear literally in the rendered line.
+- **Step 8's validation table** gains a row: *rendered line carries no YAML source syntax* — no `\"` or `\*` in the output, `**` paired. It inherits the table's existing "if any check fails: do not write the file" semantics.
+
+The second exists because of what v0.12.1 was about: **a rule with nothing to fail on is a preference, not a guardrail.** Had v0.12.3 only added the parsing instruction to step 1, it would have repeated the mistake v0.12.0 made with `index_cue`'s mandatory declaration — stated, unenforced, silently violated. Escapes leaking into the output are the observable signature of a value having been sliced instead of parsed, and unlike a cue's *content* they are mechanically detectable without judgment, which is what makes them a legitimate check rather than another reminder.
+
+A failure on that row is a parsing defect in Step 8, not a defect in the entry: re-read that entry's frontmatter as YAML and re-render. Never patch the rendered line — that treats the symptom and the next regeneration reproduces it — and never edit the entry to avoid the quote, which would let the tool's limitation dictate what knowledge is allowed to say.
+
+Scope: the corrupted line was repaired in the affected notebook before this release; only one of 35 entries had a cue containing a backslash. Any future cue quoting a literal (`"strict"`, `"./"`, `"--force"`) would have hit the same path.
+
 ## v0.12.2 — the keyword budget belongs to the rendered line, not to the entry
 
 Step 8 contradicted itself. Step 1 read `keywords` **first 5 only** — a render-time truncation. Step 4 then validated `Each entry's keyword count ≤ 5` as a hard budget, i.e. a write failure. Only one of the two can be operative: if the budget refuses, truncation is unreachable dead text; if truncation happens, the budget can never fail. On the user-scope notebook this was not academic — **26 of 29 entries stored more than 5 keywords** (the largest had 22), so under the refusing reading no index could ever be written until keywords were deleted from most of the notebook.

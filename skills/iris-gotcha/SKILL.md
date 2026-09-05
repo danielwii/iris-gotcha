@@ -601,6 +601,8 @@ Regeneration is a **pure function of the entry files** — never read or carry f
 
 1. **Read `index_cue`, `keywords` (first 5 only), `type`, `severity`, `last_violated`, `violation_count`, and file path from every entry's frontmatter** in the target scope. Do not read entry bodies for this step — the whole point of `index_cue` is that regeneration doesn't need to summarize anything.
 
+   **"Read" means parse the YAML, not slice the line.** Frontmatter is YAML: a double-quoted scalar carries escapes belonging to the source syntax, not to the value. Taking the text between the first and last `"` on the line produces the wrong string whenever the cue itself contains a quote. Real case (v0.12.2, 1 of 35 entries): stored `index_cue: "…source 必须写字符串 \"./\""` reached the index as `…source 必须写字符串 \"./\` — escapes survived, a trailing character was eaten, and the closing `**` was left unpaired because `\*` reads as an escaped asterisk. That entry's whole point was that the value must be the string `"./"`, and the index destroyed exactly that. Decode escapes and strip the quoting syntax before the value reaches step 3's template; a `"` inside the cue must appear literally in the rendered line.
+
    **The 5-keyword truncation is load-bearing, not a nicety, and it is what the budget is enforced against.** Entries may store as many `keywords` as their author finds useful for retrieval; only the first 5 are rendered, so the rest cost the always-on index nothing. Measured on a 30-entry notebook: rendering every stored keyword puts 12 of 30 lines over the 220-code-point line budget (longest 532) — i.e. an index that can never be written — while rendering the first 5 puts 0 of 30 over. Truncating is therefore the precondition for the line budget being satisfiable at all; it is not an alternative to it. Order `keywords` most-distinctive-first, since position decides what reaches the index.
 2. **Placement — each entry appears exactly once**:
    - `type` ∈ {`lesson`,`rule`,`habit`,`best-practice`} AND `last_violated` is set AND within the last 7 days → place in `## ⚠️ Recently strengthened` **only**.
@@ -618,6 +620,7 @@ Regeneration is a **pure function of the entry files** — never read or carry f
    | `index_cue` present and non-empty | every entry |
    | `type` present, and matching the entry's category directory | every entry |
    | `keywords` present and non-empty | every entry |
+   | Rendered line carries no YAML source syntax | every entry — no `\"` or `\*` in the output, and `**` paired |
    | Each `index_cue` | ≤ 100 code points |
    | Each rendered line's keyword count | ≤ 5 — guaranteed by step 1's truncation, so this cannot fail |
    | Each rendered line, excluding path | ≤ 220 code points |
@@ -632,6 +635,8 @@ Regeneration is a **pure function of the entry files** — never read or carry f
    **Never substitute for a missing `index_cue` by summarizing the entry body.** Step 8 does not read bodies by design — improvising a cue at regeneration time reintroduces exactly the unbudgeted, unreviewed natural language that `index_cue` exists to keep out of the index, and it does so invisibly. The fix for a missing field is to backfill it on the entry (Step 6.5), never to synthesize one here.
 
    For budget failures the fix is to shorten `index_cue`/`keywords` on the offending entries (Step 6.5) or split them (Step 0.5) — never truncate text or silently drop low-severity entries during regeneration.
+
+   **The source-syntax row is the check that step 1's parsing rule would otherwise lack.** Step 1 says to parse the YAML rather than slice the line, but a rule with nothing to fail on is a preference, not a guardrail — the escaped-quote corruption in v0.12.2 shipped precisely because the only defense was an instruction. Escapes leaking into the output (`\"`, `\*`) or an unpaired `**` are the observable signature of the value having been sliced instead of parsed, and unlike the cue's content they are mechanically detectable without judgment. A failure here is a parsing defect in this step, not a defect in the entry: **re-read that entry's frontmatter as YAML and re-render — never patch the rendered line, and never edit the entry to avoid the quote.**
 5. Report line counts before/after and any validation failures, per the format in Step 9.
 
 Soft budgets (`index_cue` ≤ 60, keywords ≤ 4, line ≤ 160, whole file ≤ 24,000 code points) are advisory — regeneration still writes the file if only soft budgets are exceeded, but the report should note which entries are over the soft budget so the next `action=audit` can review them.
